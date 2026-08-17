@@ -52,6 +52,18 @@ watch(
         <span>Product</span>
       </router-link>
     </a-menu-item>
+    <a-menu-item key="bidder_list" title="Bidder">
+      <router-link :to="{ name: 'bidder_list' }">
+        <team-outlined />
+        <span>Bidder</span>
+      </router-link>
+    </a-menu-item>
+    <a-menu-item key="tender" title="Tender">
+      <router-link :to="{ name: 'tender' }">
+        <file-done-outlined />
+        <span>Tender</span>
+      </router-link>
+    </a-menu-item>
   </a-menu>
 </template>
 
@@ -61,6 +73,8 @@ watch(
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 0 16px;
+  background: #1e3d2a !important;
+  border-inline-end: none !important;
 
   &::-webkit-scrollbar {
     width: 5px;
@@ -70,11 +84,6 @@ watch(
     background: rgba(255, 255, 255, 0.15);
     border-radius: 999px;
   }
-}
-
-:deep(.ant-menu) {
-  background: transparent;
-  border-inline-end: none !important;
 }
 
 :deep(.ant-menu-item) {

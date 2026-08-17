@@ -1,12 +1,15 @@
 <script setup>
-import { ref } from "vue";
-
 import MenuList from "@/components/layouts/MenuList.vue";
 
-const collapsed = ref(false);
+const collapsed = defineModel("collapsed", { type: Boolean, default: false });
+const mobileOpen = defineModel("mobileOpen", { type: Boolean, default: false });
 
 const toggleCollapsed = () => {
   collapsed.value = !collapsed.value;
+};
+
+const closeMobile = () => {
+  mobileOpen.value = false;
 };
 </script>
 
@@ -15,6 +18,7 @@ const toggleCollapsed = () => {
     v-model:collapsed="collapsed"
     :trigger="null"
     collapsible
+    breakpoint="lg"
     :width="248"
     :collapsed-width="80"
     class="app-sider"
@@ -32,26 +36,35 @@ const toggleCollapsed = () => {
       <i class="bx" :class="collapsed ? 'bx-chevron-right' : 'bx-chevron-left'"></i>
     </button>
   </a-layout-sider>
+
+  <div class="mobile-backdrop" :class="{ open: mobileOpen }" @click="closeMobile"></div>
+
+  <div class="mobile-drawer" :class="{ open: mobileOpen }">
+    <div class="brand">
+      <div class="brand-icon">B</div>
+      <span class="brand-text">Bidbi<span class="accent">Pro</span></span>
+      <button type="button" class="drawer-close" @click="closeMobile" aria-label="Close menu">
+        <i class="bx bx-x"></i>
+      </button>
+    </div>
+
+    <MenuList :collapsed="false" />
+  </div>
 </template>
 
 <style scoped lang="scss">
 .app-sider {
-  position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
-}
-
-:deep(.ant-layout-sider),
-:deep(.ant-layout-sider-dark),
-:deep(.ant-layout-sider-children) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 50;
   background: #1e3d2a !important;
-}
-
-:deep(.ant-layout-sider) {
   box-shadow: 6px 0 24px -14px rgba(0, 0, 0, 0.45);
 }
 
 :deep(.ant-layout-sider-children) {
+  background: #1e3d2a !important;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -133,6 +146,83 @@ const toggleCollapsed = () => {
   &:hover {
     background: #eaf1ec;
     transform: scale(1.1);
+  }
+}
+
+.drawer-close {
+  display: none;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.mobile-backdrop {
+  display: none;
+}
+
+.mobile-drawer {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .app-sider {
+    display: none;
+  }
+
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(15, 23, 17, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+
+    &.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  .mobile-drawer {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(80vw, 280px);
+    z-index: 95;
+    background: #1e3d2a;
+    box-shadow: 6px 0 24px -14px rgba(0, 0, 0, 0.45);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+
+    &.open {
+      transform: translateX(0);
+    }
+
+    .drawer-close {
+      display: flex;
+    }
+
+    :deep(.menu-list) {
+      flex: 1;
+    }
   }
 }
 </style>

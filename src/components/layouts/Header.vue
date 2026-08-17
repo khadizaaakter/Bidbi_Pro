@@ -8,6 +8,8 @@ import { showNotification } from "@/utilities/notification";
 const router = useRouter();
 const loginStore = useLoginStore();
 
+defineEmits(["toggle-menu"]);
+
 const menuOpen = ref(false);
 const userMenuRef = ref(null);
 
@@ -51,13 +53,22 @@ const handleLogout = async () => {
   <header class="app-header">
     <div class="header-inner">
       <RouterLink :to="{ name: 'home' }" class="brand">
-        <span class="brand-text">Bidbi <span>Pro</span></span>
+
       </RouterLink>
 
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-label="Open menu"
+        @click="$emit('toggle-menu')"
+      >
+        <i class="bx bx-menu"></i>
+      </button>
+
       <div class="header-actions">
-        <button class="icon-btn" type="button" aria-label="Notifications">
+        <!-- <button class="icon-btn" type="button" aria-label="Notifications">
           <i class="bx bx-bell"></i>
-        </button>
+        </button> -->
 
         <div class="user-menu" ref="userMenuRef">
           <button class="user-trigger" type="button" @click="toggleMenu">
@@ -99,6 +110,25 @@ const handleLogout = async () => {
   padding: 0 24px;
   max-width: 1440px;
   margin: 0 auto;
+}
+
+.menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: none;
+  background: #f6f7f0;
+  color: #285239;
+  font-size: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #e7e4d6;
+  }
 }
 
 .brand {
@@ -258,9 +288,19 @@ const handleLogout = async () => {
   transform: translateY(-6px);
 }
 
+@media (max-width: 767px) {
+  .menu-toggle {
+    display: flex;
+  }
+}
+
 @media (max-width: 640px) {
   .user-name {
     display: none;
+  }
+
+  .header-inner {
+    padding: 0 16px;
   }
 }
 </style>

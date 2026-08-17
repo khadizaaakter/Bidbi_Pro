@@ -2,10 +2,10 @@
 import { onMounted, ref } from "vue";
 import axios from "axios";
 import {
-  EyeOutlined,
   EditOutlined,
   DeleteOutlined,
   RedoOutlined,
+  EyeOutlined,
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
@@ -15,32 +15,30 @@ import { showNotification } from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
-const products = ref([]);
+const Bidders = ref([]);
 const loading = ref(false);
 const syyncing = ref(false);
 
-// sync product
-const syncProducts = async () => {
+// sync bidder
+const syncBidders = async () => {
   syyncing.value = true;
 
   try {
     const response = await axios.post(
-      `${apiBase}/admin/products/sync`,
+      `${apiBase}/admin/customers/sync`,
       null,
       loginStore.getTokenConfig
     );
 
     if (response?.status >= 200 && response?.status < 300) {
-      const message =
-        response?.data?.message || "Products synced successfully";
+      const message = response?.data?.message || "Bidder synced successfully";
 
       showNotification("success", message);
 
-      await fetchProducts();
+      await fetchBidders();
     }
   } catch (error) {
-    const message =
-      error?.response?.data?.message || "Failed to sync products";
+    const message = error?.response?.data?.message || "Failed to sync bidders";
 
     showNotification("error", message);
   } finally {
@@ -48,162 +46,37 @@ const syncProducts = async () => {
   }
 };
 
-const previewImage = ref(null);
-
-const getImageUrl = (image) => {
-  if (!image) return "";
-  return image.startsWith("http") ? image : `${base}/${image}`;
-};
-
-const openImagePreview = (image) => {
-  if (!image) return;
-  previewImage.value = getImageUrl(image);
-};
-
-const closeImagePreview = () => {
-  previewImage.value = null;
-};
-
-const pageSize = 20;
+const pageSize = 25;
 const currentPage = ref(1);
+const totalPages = ref(1);
 
 const searchQuery = ref("");
 const statusFilter = ref("");
 
-const getTotalPages = (items) => Math.max(1, Math.ceil(items.length / pageSize));
-
-const getPaginatedProducts = (items, page) => {
-  const start = (page - 1) * pageSize;
-  return items.slice(start, start + pageSize);
-};
-
 const goToPage = (page) => {
-  if (page < 1 || page > getTotalPages(products.value)) return;
+  if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
-};
-
-const fetchProducts = async () => {
-  loading.value = true;
-
-  try {
-    const response = await axios.get(`${apiBase}/admin/products`, {
-      ...loginStore.getTokenConfig,
-      params: {
-        search: searchQuery.value || undefined,
-        status: statusFilter.value || undefined,
-      },
-    });
-
-    products.value = response.data.products || [];
-    currentPage.value = 1;
-  } catch (error) {
-    const message = error.response?.data?.message || "Failed to load products";
-    showNotification("error", message);
-  } finally {
-    loading.value = false;
-  }
-};
-
-let searchDebounce = null;
-const onSearchInput = () => {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(fetchProducts, 400);
-};
-
-const showCreateModal = ref(false);
-const creating = ref(false);
-const createErrors = ref({});
-const createImagePreview = ref(null);
-
-const emptyForm = () => ({
-  product_code: "",
-  name: "",
-  base_price: "",
-  unit: "",
-  description: "",
-  status: "Active",
-  image: null,
-});
-
-const createForm = ref(emptyForm());
-
-const openCreateModal = () => {
-  createForm.value = emptyForm();
-  createErrors.value = {};
-  createImagePreview.value = null;
-  showCreateModal.value = true;
-};
-
-const closeCreateModal = () => {
-  showCreateModal.value = false;
-};
-
-const onCreateImageChange = (event) => {
-  const file = event.target.files?.[0] || null;
-  createForm.value.image = file;
-  createImagePreview.value = file ? URL.createObjectURL(file) : null;
-};
-
-const submitCreate = async () => {
-  creating.value = true;
-  createErrors.value = {};
-
-  try {
-    const payload = {
-      product_code: createForm.value.product_code,
-      name: createForm.value.name,
-      base_price: createForm.value.base_price,
-      unit: createForm.value.unit,
-      description: createForm.value.description,
-      status: createForm.value.status,
-    };
-
-    const formData = new FormData();
-    Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
-    if (createForm.value.image) {
-      formData.append("image", createForm.value.image);
-    }
-
-    const response = await axios.post(
-      `${apiBase}/admin/products`,
-      formData,
-      loginStore.getTokenConfig
-    );
-
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product created successfully");
-      closeCreateModal();
-      await fetchProducts();
-    }
-  } catch (error) {
-    if (error.response?.status === 422) {
-      createErrors.value = error.response.data.errors || {};
-    }
-    const message = error.response?.data?.message || "Failed to create product";
-    showNotification("error", message);
-  } finally {
-    creating.value = false;
-  }
+  fetchBidders();
 };
 
 const showViewModal = ref(false);
 const viewLoading = ref(false);
-const viewProduct = ref(null);
+const viewCustomer = ref(null);
 
-const openViewModal = async (product) => {
+const openViewModal = async (customer_id) => {
   showViewModal.value = true;
   viewLoading.value = true;
-  viewProduct.value = null;
+  viewCustomer.value = null;
 
   try {
     const response = await axios.get(
-      `${apiBase}/admin/products/${product.id}`,
+      `${apiBase}/admin/customers/${customer_id}`,
       loginStore.getTokenConfig
     );
 
-    viewProduct.value = response.data.product || response.data.data || response.data;
+    viewCustomer.value = response.data.customer || response.data.data || response.data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load product details";
+    const message = error.response?.data?.message || "Failed to load bidder details";
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -213,34 +86,128 @@ const openViewModal = async (product) => {
 
 const closeViewModal = () => {
   showViewModal.value = false;
-  viewProduct.value = null;
+  viewCustomer.value = null;
+};
+
+const fetchBidders = async () => {
+  loading.value = true;
+
+  try {
+    const response = await axios.get(`${apiBase}/admin/customers`, {
+      ...loginStore.getTokenConfig,
+      params: {
+        page: currentPage.value,
+        per_page: pageSize,
+        search: searchQuery.value || undefined,
+        status: statusFilter.value || undefined,
+      },
+    });
+
+    Bidders.value = response.data.customers || [];
+    totalPages.value = response.data.meta?.last_page || 1;
+  } catch (error) {
+    const message = error.response?.data?.message || "Failed to load Bidders";
+    showNotification("error", message);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const onFilterChange = () => {
+  currentPage.value = 1;
+  fetchBidders();
+};
+
+let searchDebounce = null;
+const onSearchInput = () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(onFilterChange, 400);
+};
+
+const showCreateModal = ref(false);
+const creating = ref(false);
+const createErrors = ref({});
+
+const emptyForm = () => ({
+  customer_code: "",
+  password: "",
+  name: "",
+  phone: "",
+  email: "",
+  address: "",
+  status: "Active",
+});
+
+const createForm = ref(emptyForm());
+
+const openCreateModal = () => {
+  createForm.value = emptyForm();
+  createErrors.value = {};
+  showCreateModal.value = true;
+};
+
+const closeCreateModal = () => {
+  showCreateModal.value = false;
+};
+
+const submitCreate = async () => {
+  creating.value = true;
+  createErrors.value = {};
+
+  try {
+    const data = new URLSearchParams();
+    data.append("customer_code", createForm.value.customer_code);
+    data.append("password", createForm.value.password);
+    data.append("status", createForm.value.status);
+    if (createForm.value.name) data.append("name", createForm.value.name);
+    if (createForm.value.phone) data.append("phone", createForm.value.phone);
+    if (createForm.value.email) data.append("email", createForm.value.email);
+    if (createForm.value.address) data.append("address", createForm.value.address);
+
+    const response = await axios.post(`${apiBase}/admin/customers`, data, {
+      headers: {
+        ...loginStore.getTokenConfig.headers,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    if (response?.status >= 200 && response?.status < 300) {
+      showNotification("success", "Bidder created successfully");
+      closeCreateModal();
+      await fetchBidders();
+    }
+  } catch (error) {
+    if (error.response?.status === 422) {
+      createErrors.value = error.response.data.errors || {};
+    }
+    const message = error.response?.data?.message || "Failed to create Bidder";
+    showNotification("error", message);
+  } finally {
+    creating.value = false;
+  }
 };
 
 const showEditModal = ref(false);
 const updating = ref(false);
 const editErrors = ref({});
-const editImagePreview = ref(null);
-const editingProductId = ref(null);
+const editingBidderId = ref(null);
 
 const emptyEditForm = () => ({
-  base_price: "",
-  unit: "",
+  name: "",
+  phone: "",
   status: "Active",
-  image: null,
 });
 
 const editForm = ref(emptyEditForm());
 
-const openEditModal = (product) => {
-  editingProductId.value = product.id;
+const openEditModal = (Bidder) => {
+  editingBidderId.value = Bidder.id;
   editForm.value = {
-    base_price: product.base_price ?? "",
-    unit: product.unit || "",
-    status: product.status || "Active",
-    image: null,
+    name: Bidder.name || "",
+    phone: Bidder.phone || "",
+    status: Bidder.status || "Active",
   };
   editErrors.value = {};
-  editImagePreview.value = product.image ? getImageUrl(product.image) : null;
   showEditModal.value = true;
 };
 
@@ -248,41 +215,37 @@ const closeEditModal = () => {
   showEditModal.value = false;
 };
 
-const onEditImageChange = (event) => {
-  const file = event.target.files?.[0] || null;
-  editForm.value.image = file;
-  editImagePreview.value = file ? URL.createObjectURL(file) : editImagePreview.value;
-};
-
 const submitEdit = async () => {
   updating.value = true;
   editErrors.value = {};
 
   try {
-    const formData = new FormData();
-    formData.append("base_price", editForm.value.base_price);
-    formData.append("unit", editForm.value.unit);
-    formData.append("status", editForm.value.status);
-    if (editForm.value.image) {
-      formData.append("image", editForm.value.image);
-    }
+    const data = new URLSearchParams();
+    data.append("name", editForm.value.name);
+    data.append("phone", editForm.value.phone);
+    data.append("status", editForm.value.status);
 
-    const response = await axios.post(
-      `${apiBase}/admin/products/${editingProductId.value}`,
-      formData,
-      loginStore.getTokenConfig
+    const response = await axios.put(
+      `${apiBase}/admin/customers/${editingBidderId.value}`,
+      data,
+      {
+        headers: {
+          ...loginStore.getTokenConfig.headers,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
     );
 
     if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product updated successfully");
+      showNotification("success", "Bidder updated successfully");
       closeEditModal();
-      await fetchProducts();
+      await fetchBidders();
     }
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update product";
+    const message = error.response?.data?.message || "Failed to update Bidder";
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -291,38 +254,38 @@ const submitEdit = async () => {
 
 const deletingId = ref(null);
 
-const deleteProduct = async (product) => {
-  if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+const deleteBidder = async (Bidder) => {
+  if (!window.confirm(`Are you sure you want to delete "${Bidder.name}"?`)) return;
 
-  deletingId.value = product.id;
+  deletingId.value = Bidder.id;
 
   try {
     const response = await axios.delete(
-      `${apiBase}/admin/products/${product.id}`,
+      `${apiBase}/admin/customers/${Bidder.id}`,
       loginStore.getTokenConfig
     );
 
     if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product deleted successfully");
-      await fetchProducts();
+      showNotification("success", "Bidder deleted successfully");
+      await fetchBidders();
     }
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to delete product";
+    const message = error.response?.data?.message || "Failed to delete Bidder";
     showNotification("error", message);
   } finally {
     deletingId.value = null;
   }
 };
 
-onMounted(fetchProducts);
+onMounted(fetchBidders);
 </script>
 
 <template>
   <MainLayout>
-    <div class="product-page">
+    <div class="bidder-page">
       <div class="page-toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">Products</h1>
+          <h1 class="page-title">Bidder</h1>
         </div>
 
         <div class="toolbar-right">
@@ -334,35 +297,33 @@ onMounted(fetchProducts);
             @input="onSearchInput"
           />
 
-          <select v-model="statusFilter" class="status-select" @change="fetchProducts">
+          <select v-model="statusFilter" class="status-select" @change="onFilterChange">
             <option value="">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>
 
-          <!-- <button type="button" class="create-btn" @click="openCreateModal">+ Create</button> -->
-          <button
-            type="button"
-            class="sync-btn"
-            :disabled="syncing"
-            @click="syncProducts"
-          >
+          <!-- <button type="button" class="create-btn" @click="openCreateModal">
+            + Create
+          </button> -->
+          <button type="button" class="sync-btn" :disabled="syncing" @click="syncBidders">
             <RedoOutlined />
-            {{ syncing ? "Syncing..." : "Sync Products" }}
+            {{ syncing ? "Syncing..." : "Sync Bidders" }}
           </button>
         </div>
       </div>
 
       <div class="table-card">
-        <table class="products-table">
+        <table class="Bidders-table">
           <thead>
             <tr>
               <th>SL</th>
-              <th>Product Code</th>
+              <th>Customer Code</th>
               <th>Name</th>
-              <th>Base Price</th>
-              <th>Unit</th>
-              <!-- <th>Image</th> -->
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Address</th>
+              <th>Company</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -371,32 +332,21 @@ onMounted(fetchProducts);
             <tr v-if="loading">
               <td colspan="7" class="state-cell">Loading...</td>
             </tr>
-            <tr v-else-if="!products.length">
-              <td colspan="7" class="state-cell">No products found</td>
+            <tr v-else-if="!Bidders.length">
+              <td colspan="7" class="state-cell">No bidders found</td>
             </tr>
             <template v-else>
-              <tr
-                v-for="(product, index) in getPaginatedProducts(products, currentPage)"
-                :key="product.id"
-              >
+              <tr v-for="(bidder, index) in Bidders" :key="bidder.id">
                 <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
-                <td>{{ product.product_code }}</td>
-                <td>{{ product.name }}</td>
-                <td class="price-cell">{{ Number(product.base_price).toFixed(2) }}</td>
-                <td>{{ product.unit }}</td>
-                <!-- <td>
-                  <img
-                    v-if="product.image"
-                    :src="getImageUrl(product.image)"
-                    :alt="product.name"
-                    class="product-thumb"
-                    @click="openImagePreview(product.image)"
-                  />
-                  <span v-else class="no-image">No Image</span>
-                </td> -->
+                <td>{{ bidder.customer_code }}</td>
+                <td>{{ bidder.name }}</td>
+                <td>{{ bidder.phone || "-" }}</td>
+                <td>{{ bidder.email || "-" }}</td>
+                <td>{{ bidder.address || "-" }}</td>
+                <td>{{ bidder.company_name || "-" }}</td>
                 <td>
-                  <span :class="['status-badge', product.status?.toLowerCase()]">
-                    {{ product.status }}
+                  <span :class="['status-badge', bidder.status?.toLowerCase()]">
+                    {{ bidder.status }}
                   </span>
                 </td>
                 <td>
@@ -405,7 +355,7 @@ onMounted(fetchProducts);
                       type="button"
                       class="action-btn view-btn"
                       title="Show"
-                      @click="openViewModal(product)"
+                      @click="openViewModal(bidder.id)"
                     >
                       <EyeOutlined />
                     </button>
@@ -413,7 +363,7 @@ onMounted(fetchProducts);
                       type="button"
                       class="action-btn edit-btn"
                       title="Edit"
-                      @click="openEditModal(product)"
+                      @click="openEditModal(bidder)"
                     >
                       <EditOutlined />
                     </button> -->
@@ -421,8 +371,8 @@ onMounted(fetchProducts);
                       type="button"
                       class="action-btn delete-btn"
                       title="Delete"
-                      :disabled="deletingId === product.id"
-                      @click="deleteProduct(product)"
+                      :disabled="deletingId === bidder.id"
+                      @click="deleteBidder(bidder)"
                     >
                       <DeleteOutlined />
                     </button> -->
@@ -433,7 +383,7 @@ onMounted(fetchProducts);
           </tbody>
         </table>
 
-        <div v-if="!loading && products.length" class="pagination">
+        <div v-if="!loading && Bidders.length" class="pagination">
           <button
             type="button"
             class="page-btn"
@@ -443,14 +393,12 @@ onMounted(fetchProducts);
             Prev
           </button>
 
-          <span class="page-info"
-            >Page {{ currentPage }} of {{ getTotalPages(products) }}</span
-          >
+          <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
 
           <button
             type="button"
             class="page-btn"
-            :disabled="currentPage === getTotalPages(products)"
+            :disabled="currentPage === totalPages"
             @click="goToPage(currentPage + 1)"
           >
             Next
@@ -458,19 +406,10 @@ onMounted(fetchProducts);
         </div>
       </div>
 
-      <div v-if="previewImage" class="image-modal-backdrop" @click="closeImagePreview">
-        <div class="image-modal-content" @click.stop>
-          <button type="button" class="image-modal-close" @click="closeImagePreview">
-            &times;
-          </button>
-          <img :src="previewImage" alt="Product preview" />
-        </div>
-      </div>
-
       <div v-if="showViewModal" class="form-modal-backdrop" @click="closeViewModal">
         <div class="form-modal-content" @click.stop>
           <div class="form-modal-header">
-            <h2>Product Details</h2>
+            <h2>Bidder Details</h2>
             <button type="button" class="form-modal-close" @click="closeViewModal">
               &times;
             </button>
@@ -478,38 +417,41 @@ onMounted(fetchProducts);
 
           <div v-if="viewLoading" class="state-cell">Loading...</div>
 
-          <div v-else-if="viewProduct" class="view-details">
+          <div v-else-if="viewCustomer" class="view-details">
             <div class="view-row">
-              <span class="view-label">Product Code</span>
-              <span class="view-value">{{ viewProduct.product_code }}</span>
+              <span class="view-label">Customer Code</span>
+              <span class="view-value">{{ viewCustomer.customer_code }}</span>
             </div>
 
             <div class="view-row">
               <span class="view-label">Name</span>
-              <span class="view-value">{{ viewProduct.name }}</span>
+              <span class="view-value">{{ viewCustomer.name }}</span>
             </div>
 
             <div class="view-row">
-              <span class="view-label">Base Price</span>
-              <span class="view-value">{{
-                Number(viewProduct.base_price).toFixed(2)
-              }}</span>
+              <span class="view-label">Phone</span>
+              <span class="view-value">{{ viewCustomer.phone || "-" }}</span>
             </div>
 
             <div class="view-row">
-              <span class="view-label">Unit</span>
-              <span class="view-value">{{ viewProduct.unit }}</span>
+              <span class="view-label">Email</span>
+              <span class="view-value">{{ viewCustomer.email || "-" }}</span>
             </div>
 
             <div class="view-row">
-              <span class="view-label">Description</span>
-              <span class="view-value">{{ viewProduct.description || "-" }}</span>
+              <span class="view-label">Address</span>
+              <span class="view-value">{{ viewCustomer.address || "-" }}</span>
+            </div>
+
+            <div class="view-row">
+              <span class="view-label">Company</span>
+              <span class="view-value">{{ viewCustomer.company_name || "-" }}</span>
             </div>
 
             <div class="view-row">
               <span class="view-label">Status</span>
-              <span :class="['status-badge', viewProduct.status?.toLowerCase()]">
-                {{ viewProduct.status }}
+              <span :class="['status-badge', viewCustomer.status?.toLowerCase()]">
+                {{ viewCustomer.status }}
               </span>
             </div>
           </div>
@@ -519,7 +461,7 @@ onMounted(fetchProducts);
       <div v-if="showCreateModal" class="form-modal-backdrop" @click="closeCreateModal">
         <div class="form-modal-content" @click.stop>
           <div class="form-modal-header">
-            <h2>Create Product</h2>
+            <h2>Create Bidder</h2>
             <button type="button" class="form-modal-close" @click="closeCreateModal">
               &times;
             </button>
@@ -527,16 +469,21 @@ onMounted(fetchProducts);
 
           <form class="create-form" @submit.prevent="submitCreate">
             <div class="form-row">
-              <label>Product Code</label>
-              <input v-model="createForm.product_code" type="text" required />
-              <span v-if="createErrors.product_code" class="field-error">{{
-                createErrors.product_code[0]
+              <label>Customer Code</label>
+              <input
+                v-model="createForm.customer_code"
+                type="text"
+                autocomplete="off"
+                required
+              />
+              <span v-if="createErrors.customer_code" class="field-error">{{
+                createErrors.customer_code[0]
               }}</span>
             </div>
 
             <div class="form-row">
               <label>Name</label>
-              <input v-model="createForm.name" type="text" required />
+              <input v-model="createForm.name" type="text" placeholder="Enter name" />
               <span v-if="createErrors.name" class="field-error">{{
                 createErrors.name[0]
               }}</span>
@@ -544,38 +491,49 @@ onMounted(fetchProducts);
 
             <div class="form-row form-row-split">
               <div>
-                <label>Base Price</label>
-                <input
-                  v-model="createForm.base_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-                <span v-if="createErrors.base_price" class="field-error">{{
-                  createErrors.base_price[0]
+                <label>Phone</label>
+                <input v-model="createForm.phone" type="text" placeholder="Enter phone" />
+                <span v-if="createErrors.phone" class="field-error">{{
+                  createErrors.phone[0]
                 }}</span>
               </div>
 
               <div>
-                <label>Unit</label>
+                <label>Email</label>
                 <input
-                  v-model="createForm.unit"
-                  type="text"
-                  placeholder="Enter Unit"
-                  required
+                  v-model="createForm.email"
+                  type="email"
+                  autocomplete="off"
+                  placeholder="Enter email"
                 />
-                <span v-if="createErrors.unit" class="field-error">{{
-                  createErrors.unit[0]
+                <span v-if="createErrors.email" class="field-error">{{
+                  createErrors.email[0]
                 }}</span>
               </div>
             </div>
 
             <div class="form-row">
-              <label>Description</label>
-              <textarea v-model="createForm.description" rows="3"></textarea>
-              <span v-if="createErrors.description" class="field-error">{{
-                createErrors.description[0]
+              <label>Address</label>
+              <textarea
+                v-model="createForm.address"
+                rows="3"
+                placeholder="Enter address"
+              ></textarea>
+              <span v-if="createErrors.address" class="field-error">{{
+                createErrors.address[0]
+              }}</span>
+            </div>
+
+            <div class="form-row">
+              <label>Password</label>
+              <input
+                v-model="createForm.password"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
+              <span v-if="createErrors.password" class="field-error">{{
+                createErrors.password[0]
               }}</span>
             </div>
 
@@ -585,20 +543,6 @@ onMounted(fetchProducts);
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
-            </div>
-
-            <div class="form-row">
-              <label>Image</label>
-              <input type="file" accept="image/*" @change="onCreateImageChange" />
-              <img
-                v-if="createImagePreview"
-                :src="createImagePreview"
-                alt="Preview"
-                class="form-image-preview"
-              />
-              <span v-if="createErrors.image" class="field-error">{{
-                createErrors.image[0]
-              }}</span>
             </div>
 
             <div class="form-actions">
@@ -616,40 +560,27 @@ onMounted(fetchProducts);
       <div v-if="showEditModal" class="form-modal-backdrop" @click="closeEditModal">
         <div class="form-modal-content" @click.stop>
           <div class="form-modal-header">
-            <h2>Edit Product</h2>
+            <h2>Edit Bidder</h2>
             <button type="button" class="form-modal-close" @click="closeEditModal">
               &times;
             </button>
           </div>
 
           <form class="create-form" @submit.prevent="submitEdit">
-            <div class="form-row form-row-split">
-              <div>
-                <label>Base Price</label>
-                <input
-                  v-model="editForm.base_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-                <span v-if="editErrors.base_price" class="field-error">{{
-                  editErrors.base_price[0]
-                }}</span>
-              </div>
+            <div class="form-row">
+              <label>Name</label>
+              <input v-model="editForm.name" type="text" required />
+              <span v-if="editErrors.name" class="field-error">{{
+                editErrors.name[0]
+              }}</span>
+            </div>
 
-              <div>
-                <label>Unit</label>
-                <input
-                  v-model="editForm.unit"
-                  type="text"
-                  placeholder="Enter Unit"
-                  required
-                />
-                <span v-if="editErrors.unit" class="field-error">{{
-                  editErrors.unit[0]
-                }}</span>
-              </div>
+            <div class="form-row">
+              <label>Phone</label>
+              <input v-model="editForm.phone" type="text" />
+              <span v-if="editErrors.phone" class="field-error">{{
+                editErrors.phone[0]
+              }}</span>
             </div>
 
             <div class="form-row">
@@ -658,20 +589,6 @@ onMounted(fetchProducts);
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
-            </div>
-
-            <div class="form-row">
-              <label>Image</label>
-              <input type="file" accept="image/*" @change="onEditImageChange" />
-              <img
-                v-if="editImagePreview"
-                :src="editImagePreview"
-                alt="Preview"
-                class="form-image-preview"
-              />
-              <span v-if="editErrors.image" class="field-error">{{
-                editErrors.image[0]
-              }}</span>
             </div>
 
             <div class="form-actions">
@@ -690,7 +607,7 @@ onMounted(fetchProducts);
 </template>
 
 <style scoped lang="scss">
-.product-page {
+.bidder-page {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -760,22 +677,6 @@ onMounted(fetchProducts);
     background: #1f3f2c;
   }
 }
-.sync-btn {
-  height: 38px;
-  padding: 0 18px;
-  border-radius: 10px;
-  border: none;
-  background: #285239;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s ease;
-
-  &:hover {
-    background: #1f3f2c;
-  }
-}
 
 .table-card {
   background: #fff;
@@ -786,7 +687,7 @@ onMounted(fetchProducts);
   overflow-x: auto;
 }
 
-.products-table {
+.Bidders-table {
   width: 100%;
   min-width: 720px;
   border-collapse: collapse;
@@ -861,10 +762,9 @@ onMounted(fetchProducts);
 .price-cell {
   font-weight: 700;
   color: #285239;
-  text-align: right;
 }
 
-.product-thumb {
+.Bidder-thumb {
   width: 44px;
   height: 44px;
   object-fit: cover;
@@ -1048,6 +948,31 @@ onMounted(fetchProducts);
   justify-content: center;
 }
 
+.view-details {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.view-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.view-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #6b7461;
+}
+
+.view-value {
+  font-size: 14px;
+  color: #2b2e24;
+}
+
 .create-form {
   display: flex;
   flex-direction: column;
@@ -1120,31 +1045,6 @@ onMounted(fetchProducts);
   color: #b3261e;
 }
 
-.view-details {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.view-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.view-label {
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: #6b7461;
-}
-
-.view-value {
-  font-size: 14px;
-  color: #2b2e24;
-}
-
 .form-image-preview {
   width: 72px;
   height: 72px;
@@ -1160,6 +1060,23 @@ onMounted(fetchProducts);
   justify-content: flex-end;
   gap: 12px;
   margin-top: 8px;
+}
+
+.sync-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  background: #285239;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: #1f3f2c;
+  }
 }
 
 @media (max-width: 640px) {
