@@ -362,7 +362,7 @@ onMounted(fetchProducts);
               <th>Name</th>
               <th>Base Price</th>
               <th>Unit</th>
-              <!-- <th>Image</th> -->
+              <th>Image</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -384,7 +384,7 @@ onMounted(fetchProducts);
                 <td>{{ product.name }}</td>
                 <td class="price-cell">{{ Number(product.base_price).toFixed(2) }}</td>
                 <td>{{ product.unit }}</td>
-                <!-- <td>
+                <td>
                   <img
                     v-if="product.image"
                     :src="getImageUrl(product.image)"
@@ -393,7 +393,7 @@ onMounted(fetchProducts);
                     @click="openImagePreview(product.image)"
                   />
                   <span v-else class="no-image">No Image</span>
-                </td> -->
+                </td>
                 <td>
                   <span :class="['status-badge', product.status?.toLowerCase()]">
                     {{ product.status }}

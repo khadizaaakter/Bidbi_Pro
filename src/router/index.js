@@ -5,6 +5,9 @@ import Home from "@/views/Home.vue";
 import Product_list from "@/views/Products/product_list.vue";
 import Bidder_list from "@/views/Bidders/bidder_list.vue";
 import Tender_list from "@/views/Tenders/tender_list.vue";
+import User_manager from "@/views/user manager/user_manager.vue";
+import Role from "@/views/user manager/role.vue";
+import Permission from "@/views/user manager/permission.vue";
 
 
 
@@ -33,6 +36,21 @@ const routes = [
     path: "/tender_list",
     name: "tender",
     component: Tender_list,
+  },
+  {
+    path: "/user_manager",
+    name: "user_manager",
+    component: User_manager,
+  },
+  {
+    path: "/role",
+    name: "role",
+    component: Role,
+  },
+  {
+    path: "/permission",
+    name: "permission",
+    component: Permission,
   },
   {
     path: "/:catchAll(.*)",

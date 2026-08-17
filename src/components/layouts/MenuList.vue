@@ -64,6 +64,24 @@ watch(
         <span>Tender</span>
       </router-link>
     </a-menu-item>
+    <a-menu-item key="user_manager" title="User Manager">
+      <router-link :to="{ name: 'user_manager' }">
+        <file-done-outlined />
+        <span>User manager</span>
+      </router-link>
+    </a-menu-item>
+    <a-menu-item key="role" title="Role">
+      <router-link :to="{ name: 'role' }">
+        <setting-outlined />
+        <span>Role</span>
+      </router-link>
+    </a-menu-item>
+    <a-menu-item key="permission" title="Permission">
+      <router-link :to="{ name: 'permission' }">
+        <setting-outlined />
+        <span>Permission</span>
+      </router-link>
+    </a-menu-item>
   </a-menu>
 </template>
 
