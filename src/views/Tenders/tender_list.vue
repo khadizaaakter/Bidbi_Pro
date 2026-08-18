@@ -12,7 +12,11 @@ import {
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase, base } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -31,15 +35,20 @@ const syncTenders = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      const message = response?.data?.message || "Tender synced successfully";
-
-      showNotification("success", message);
-
-      await fetchTenders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to sync tenders");
+      showNotification("error", message);
+      return;
     }
+
+    const message = response?.data?.message || "Tender synced successfully";
+    showNotification("success", message);
+    await fetchTenders();
   } catch (error) {
-    const message = error?.response?.data?.message || "Failed to sync tenders";
+    const message = extractErrorMessage(
+      error?.response?.data,
+      "Failed to sync tenders"
+    );
 
     showNotification("error", message);
   } finally {
@@ -89,7 +98,10 @@ const openBidderModal = async (tender) => {
     bidders.value = response?.data?.bidders || [];
     totalBidders.value = response?.data?.total_bidders || 0;
   } catch (error) {
-    const message = error?.response?.data?.message || "Failed to load bidder sheet";
+    const message = extractErrorMessage(
+      error?.response?.data,
+      "Failed to load bidder sheet"
+    );
 
     showNotification("error", message);
 
@@ -120,7 +132,10 @@ const openViewModal = async (tender_id) => {
 
     viewTender.value = response.data.tender || response.data.data || response.data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load tender details";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load tender details"
+    );
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -151,7 +166,10 @@ const fetchTenders = async () => {
     Tenders.value = response.data.tenders || [];
     totalPages.value = response.data.meta?.last_page || 1;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load Tenders";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load Tenders"
+    );
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -188,7 +206,10 @@ const fetchProducts = async () => {
 
     products.value = response.data.products || [];
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load products";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load products"
+    );
     showNotification("error", message);
   } finally {
     productsLoading.value = false;
@@ -215,19 +236,26 @@ const selectedProductLabel = () => {
   return selected ? `${selected.product_code} - ${selected.name}` : "";
 };
 
-const toggleProductDropdown = () => {
+const openProductDropdown = () => {
   if (productsLoading.value) return;
-  showProductDropdown.value = !showProductDropdown.value;
+  showProductDropdown.value = true;
 };
 
 const closeProductDropdown = () => {
   showProductDropdown.value = false;
-  productSearch.value = "";
+  productSearch.value = selectedProductLabel();
 };
 
 const selectProduct = (product) => {
   createForm.value.product_code = product.product_code;
-  closeProductDropdown();
+  productSearch.value = `${product.product_code} - ${product.name}`;
+  showProductDropdown.value = false;
+};
+
+const clearProduct = () => {
+  createForm.value.product_code = "";
+  productSearch.value = "";
+  showProductDropdown.value = false;
 };
 
 const onDocumentClick = (event) => {
@@ -240,17 +268,12 @@ const onDocumentClick = (event) => {
   }
 };
 
-// generate a reference code like TND-20260817-1432-7F3K
+// generate a short, unique reference code like TND-QX8F2K-9P3
 const generateRefCode = () => {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const time = Date.now().toString(36).toUpperCase().slice(-6);
+  const random = Math.random().toString(36).slice(2, 5).toUpperCase();
 
-  return `TND-${y}${m}${d}-${hh}${mm}-${random}`;
+  return `TND-${time}-${random}`;
 };
 
 const emptyForm = () => ({
@@ -309,16 +332,23 @@ const submitCreate = async () => {
       },
     });
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Tender created successfully");
-      closeCreateModal();
-      await fetchTenders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to create tender");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Tender created successfully");
+    closeCreateModal();
+    await fetchTenders();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to create tender";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to create tender"
+    );
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -375,34 +405,41 @@ const submitEdit = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      const updatedTender = response?.data?.tender;
-
-      if (updatedTender) {
-        const index = Tenders.value.findIndex(
-          (t) => t.tender_id === updatedTender.tender_id
-        );
-
-        if (index !== -1) {
-          Tenders.value[index] = {
-            ...Tenders.value[index],
-            ref_code: updatedTender.ref_code,
-            quantity: updatedTender.available_quantity,
-            closing_date: updatedTender.end_date,
-            cutoff_label: updatedTender.closing_label,
-            status: updatedTender.status,
-          };
-        }
-      }
-
-      showNotification("success", "Tender updated successfully");
-      closeEditModal();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update Tender");
+      showNotification("error", message);
+      return;
     }
+
+    const updatedTender = response?.data?.tender;
+
+    if (updatedTender) {
+      const index = Tenders.value.findIndex(
+        (t) => t.tender_id === updatedTender.tender_id
+      );
+
+      if (index !== -1) {
+        Tenders.value[index] = {
+          ...Tenders.value[index],
+          ref_code: updatedTender.ref_code,
+          quantity: updatedTender.available_quantity,
+          closing_date: updatedTender.end_date,
+          cutoff_label: updatedTender.closing_label,
+          status: updatedTender.status,
+        };
+      }
+    }
+
+    showNotification("success", "Tender updated successfully");
+    closeEditModal();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update Tender";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to update Tender"
+    );
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -436,13 +473,20 @@ const confirmDeleteTender = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Tender deleted successfully");
-      closeDeleteModal();
-      await fetchTenders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to delete Tender");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Tender deleted successfully");
+    closeDeleteModal();
+    await fetchTenders();
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to delete Tender";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to delete Tender"
+    );
     showNotification("error", message);
   } finally {
     deletingId.value = null;
@@ -749,7 +793,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="showCreateModal" class="form-modal-backdrop" @click="closeCreateModal">
-        <div class="form-modal-content" @click.stop>
+        <div class="form-modal-content" @click.stop="onDocumentClick">
           <div class="form-modal-header">
             <h2>Create Tender</h2>
             <button type="button" class="form-modal-close" @click="closeCreateModal">
@@ -773,22 +817,45 @@ onBeforeUnmount(() => {
 
             <div class="form-row">
               <label>Product</label>
-              <select
-                v-model="createForm.product_code"
-                :disabled="productsLoading"
-                required
-              >
-                <option value="" disabled>
-                  {{ productsLoading ? "Loading products..." : "Select a product" }}
-                </option>
-                <option
-                  v-for="product in products"
-                  :key="product.product_code"
-                  :value="product.product_code"
+              <div class="product-select" ref="productSelectRef">
+                <input
+                  v-model="productSearch"
+                  type="text"
+                  class="product-select-input"
+                  :placeholder="productsLoading ? 'Loading products...' : 'Select a product'"
+                  :disabled="productsLoading"
+                  autocomplete="off"
+                  @focus="openProductDropdown"
+                  @click="openProductDropdown"
+                />
+                <button
+                  v-if="createForm.product_code"
+                  type="button"
+                  class="product-select-clear"
+                  title="Clear selection"
+                  @click="clearProduct"
                 >
-                  {{ product.product_code }} - {{ product.name }}
-                </option>
-              </select>
+                  &times;
+                </button>
+                <span v-else class="product-select-caret">&#9662;</span>
+
+                <div v-if="showProductDropdown" class="product-dropdown">
+                  <ul class="product-dropdown-list">
+                    <li
+                      v-for="product in filteredProducts()"
+                      :key="product.product_code"
+                      class="product-dropdown-item"
+                      :class="{ active: product.product_code === createForm.product_code }"
+                      @click="selectProduct(product)"
+                    >
+                      {{ product.product_code }} - {{ product.name }}
+                    </li>
+                    <li v-if="!filteredProducts().length" class="product-dropdown-empty">
+                      No products found
+                    </li>
+                  </ul>
+                </div>
+              </div>
               <span v-if="createErrors.product_code" class="field-error">{{
                 createErrors.product_code[0]
               }}</span>
@@ -1381,6 +1448,111 @@ onBeforeUnmount(() => {
 .field-error {
   font-size: 12px;
   color: #b3261e;
+}
+
+.product-select {
+  position: relative;
+}
+
+.product-select-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 32px 0 14px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #2b2e24;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    border-color: #285239;
+  }
+
+  &:disabled {
+    background: #f6f7f0;
+    color: #6b7461;
+    cursor: not-allowed;
+  }
+}
+
+.product-select-caret {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #6b7461;
+  pointer-events: none;
+}
+
+.product-select-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #6b7461;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+
+  &:hover {
+    background: #f6f7f0;
+    color: #2b2e24;
+  }
+}
+
+.product-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid #e7e4d6;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.product-dropdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.product-dropdown-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #2b2e24;
+  cursor: pointer;
+
+  &:hover {
+    background: #f6f7f0;
+  }
+
+  &.active {
+    background: #eef3ea;
+    font-weight: 700;
+  }
+}
+
+.product-dropdown-empty {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #8a9080;
 }
 
 .form-image-preview {

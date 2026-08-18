@@ -6,7 +6,11 @@ import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons-vue
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -26,7 +30,7 @@ const fetchRoles = async () => {
     roles.value = response.data.role || [];
     currentPage.value = 1;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load roles";
+    const message = extractErrorMessage(error.response?.data, "Failed to load roles");
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -42,8 +46,10 @@ const fetchPermissions = async () => {
 
     permissions.value = response.data.permission || [];
   } catch (error) {
-    const message =
-      error.response?.data?.message || "Failed to load permissions";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load permissions"
+    );
     showNotification("error", message);
   }
 };
@@ -106,7 +112,10 @@ const openViewModal = async (role) => {
 
     viewRole.value = response.data.role;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load role details";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load role details"
+    );
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -156,16 +165,20 @@ const submitCreate = async () => {
       },
     });
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Role created successfully");
-      closeCreateModal();
-      await fetchRoles();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to create role");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Role created successfully");
+    closeCreateModal();
+    await fetchRoles();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to create role";
+    const message = extractErrorMessage(error.response?.data, "Failed to create role");
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -218,16 +231,20 @@ const submitEdit = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Role updated successfully");
-      closeEditModal();
-      await fetchRoles();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update role");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Role updated successfully");
+    closeEditModal();
+    await fetchRoles();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update role";
+    const message = extractErrorMessage(error.response?.data, "Failed to update role");
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -235,9 +252,22 @@ const submitEdit = async () => {
 };
 
 const deletingId = ref(null);
+const showDeleteModal = ref(false);
+const roleToDelete = ref(null);
 
-const deleteRole = async (role) => {
-  if (!window.confirm(`Are you sure you want to delete "${role.name}"?`)) return;
+const openDeleteModal = (role) => {
+  roleToDelete.value = role;
+  showDeleteModal.value = true;
+};
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  roleToDelete.value = null;
+};
+
+const confirmDelete = async () => {
+  const role = roleToDelete.value;
+  if (!role) return;
 
   deletingId.value = role.id;
 
@@ -247,12 +277,17 @@ const deleteRole = async (role) => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Role deleted successfully");
-      await fetchRoles();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to delete role");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Role deleted successfully");
+    closeDeleteModal();
+    await fetchRoles();
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to delete role";
+    const message = extractErrorMessage(error.response?.data, "Failed to delete role");
     showNotification("error", message);
   } finally {
     deletingId.value = null;
@@ -295,7 +330,7 @@ onMounted(() => {
               <th>SL</th>
               <th>Name</th>
               <th>Permissions</th>
-              <th>Created At</th>
+              <!-- <th>Created At</th> -->
               <th>Action</th>
             </tr>
           </thead>
@@ -319,7 +354,7 @@ onMounted(() => {
                 <td>
                   <span class="permission-badge">{{ getPermissionNames(role) }}</span>
                 </td>
-                <td>{{ formatDate(role.created_at) }}</td>
+                <!-- <td>{{ formatDate(role.created_at) }}</td> -->
                 <td>
                   <div class="action-buttons">
                     <button
@@ -343,7 +378,7 @@ onMounted(() => {
                       class="action-btn delete-btn"
                       title="Delete"
                       :disabled="deletingId === role.id"
-                      @click="deleteRole(role)"
+                      @click="openDeleteModal(role)"
                     >
                       <DeleteOutlined />
                     </button>
@@ -530,6 +565,39 @@ onMounted(() => {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div
+        v-if="showDeleteModal"
+        class="form-modal-backdrop"
+        @click="closeDeleteModal"
+      >
+        <div class="form-modal-content delete-modal-content" @click.stop>
+          <div class="form-modal-header">
+            <h2>Delete Role</h2>
+            <button type="button" class="form-modal-close" @click="closeDeleteModal">
+              &times;
+            </button>
+          </div>
+
+          <p class="delete-confirm-text">
+            Are you sure you want to delete "{{ roleToDelete?.name }}"?
+          </p>
+
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" @click="closeDeleteModal">
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="delete-confirm-btn"
+              :disabled="deletingId === roleToDelete?.id"
+              @click="confirmDelete"
+            >
+              {{ deletingId === roleToDelete?.id ? "Deleting..." : "Yes" }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -925,6 +993,38 @@ onMounted(() => {
 
   &:hover:not(:disabled) {
     background: #1f3f2c;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.delete-modal-content {
+  max-width: 400px;
+}
+
+.delete-confirm-text {
+  font-size: 14px;
+  color: #2b2e24;
+  margin: 0 0 8px;
+}
+
+.delete-confirm-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  background: #b3261e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: #8f1e18;
   }
 
   &:disabled {

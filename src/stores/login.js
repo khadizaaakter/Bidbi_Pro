@@ -16,6 +16,21 @@ export const useLoginStore = defineStore("loginStore", {
         Authorization: `Bearer ${state.token}`,
       },
     }),
+
+    permissionNames: (state) => {
+      const direct = state.user?.permissions?.map((permission) => permission.name) || [];
+      const fromRoles =
+        state.user?.roles?.flatMap(
+          (role) => role.permissions?.map((permission) => permission.name) || []
+        ) || [];
+
+      return [...new Set([...direct, ...fromRoles])];
+    },
+
+    hasPermission: (state) => (permissionName) => {
+      if (!permissionName) return true;
+      return state.permissionNames.includes(permissionName);
+    },
   },
 
   actions: {

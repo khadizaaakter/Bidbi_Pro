@@ -1,12 +1,21 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import axios from "axios";
-import { EyeOutlined, EditOutlined, KeyOutlined } from "@ant-design/icons-vue";
+import {
+  EyeOutlined,
+  EditOutlined,
+  KeyOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -25,7 +34,7 @@ const fetchUsers = async () => {
     users.value = response.data.users || [];
     currentPage.value = 1;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load users";
+    const message = extractErrorMessage(error.response?.data, "Failed to load users");
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -37,14 +46,16 @@ const roleOptions = ref([]);
 const fetchRoleOptions = async () => {
   try {
     const response = await axios.get(
-      `${apiBase}/role_wise_user`,
+      `${apiBase}/roles`,
       loginStore.getTokenConfig
     );
 
-    roleOptions.value = Object.keys(response.data.roles || {});
+    roleOptions.value = (response.data.role || []).map((role) => role.name);
   } catch (error) {
-    const message =
-      error.response?.data?.message || "Failed to load role filter options";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load role filter options"
+    );
     showNotification("error", message);
   }
 };
@@ -60,8 +71,10 @@ const fetchPermissions = async () => {
 
     permissions.value = response.data.permission || [];
   } catch (error) {
-    const message =
-      error.response?.data?.message || "Failed to load permissions";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load permissions"
+    );
     showNotification("error", message);
   }
 };
@@ -142,7 +155,10 @@ const openViewModal = async (user) => {
 
     viewUser.value = response.data.result;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load user details";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load user details"
+    );
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -196,16 +212,20 @@ const submitCreate = async () => {
       },
     });
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "User created successfully");
-      closeCreateModal();
-      await fetchUsers();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to create user");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "User created successfully");
+    closeCreateModal();
+    await fetchUsers();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to create user";
+    const message = extractErrorMessage(error.response?.data, "Failed to create user");
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -261,16 +281,20 @@ const submitEdit = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "User updated successfully");
-      closeEditModal();
-      await fetchUsers();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update user");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "User updated successfully");
+    closeEditModal();
+    await fetchUsers();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update user";
+    const message = extractErrorMessage(error.response?.data, "Failed to update user");
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -322,20 +346,75 @@ const submitAssign = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Permissions assigned successfully");
-      closeAssignModal();
-      await fetchUsers();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(
+        response?.data,
+        "Failed to assign permissions"
+      );
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Permissions assigned successfully");
+    closeAssignModal();
+    await fetchUsers();
   } catch (error) {
     if (error.response?.status === 422) {
       assignErrors.value = error.response.data.errors || {};
     }
-    const message =
-      error.response?.data?.message || "Failed to assign permissions";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to assign permissions"
+    );
     showNotification("error", message);
   } finally {
     assigning.value = false;
+  }
+};
+
+const deletingId = ref(null);
+const showDeleteModal = ref(false);
+const deletingUser = ref(null);
+
+const openDeleteModal = (user) => {
+  deletingUser.value = user;
+  showDeleteModal.value = true;
+};
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  deletingUser.value = null;
+};
+
+const confirmDeleteUser = async () => {
+  const user = deletingUser.value;
+  if (!user) return;
+
+  deletingId.value = user.id;
+
+  try {
+    const response = await axios.delete(
+      `${apiBase}/user_delete/${user.id}`,
+      loginStore.getTokenConfig
+    );
+
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to delete user");
+      showNotification("error", message);
+      return;
+    }
+
+    showNotification("success", "User deleted successfully");
+    closeDeleteModal();
+    await fetchUsers();
+  } catch (error) {
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to delete user"
+    );
+    showNotification("error", message);
+  } finally {
+    deletingId.value = null;
   }
 };
 
@@ -388,7 +467,7 @@ onMounted(() => {
               <th>Name</th>
               <th>Email</th>
               <th>Role</th>
-              <th>Created At</th>
+              <!-- <th>Created At</th> -->
               <th>Action</th>
             </tr>
           </thead>
@@ -413,7 +492,7 @@ onMounted(() => {
                 <td>
                   <span class="role-badge">{{ getRoleNames(user) }}</span>
                 </td>
-                <td>{{ formatDate(user.created_at) }}</td>
+                <!-- <td>{{ formatDate(user.created_at) }}</td> -->
                 <td>
                   <div class="action-buttons">
                     <button
@@ -432,13 +511,22 @@ onMounted(() => {
                     >
                       <EditOutlined />
                     </button>
-                    <button
+                    <!-- <button
                       type="button"
                       class="action-btn assign-btn"
                       title="Assign Permission"
                       @click="openAssignModal(user)"
                     >
                       <KeyOutlined />
+                    </button> -->
+                    <button
+                      type="button"
+                      class="action-btn delete-btn"
+                      title="Delete"
+                      :disabled="deletingId === user.id"
+                      @click="openDeleteModal(user)"
+                    >
+                      <DeleteOutlined />
                     </button>
                   </div>
                 </td>
@@ -695,6 +783,35 @@ onMounted(() => {
           </form>
         </div>
       </div>
+
+      <div v-if="showDeleteModal" class="form-modal-backdrop" @click="closeDeleteModal">
+        <div class="form-modal-content delete-modal-content" @click.stop>
+          <div class="form-modal-header">
+            <h2>Delete User</h2>
+            <button type="button" class="form-modal-close" @click="closeDeleteModal">
+              &times;
+            </button>
+          </div>
+
+          <p class="delete-confirm-text">
+            Are you sure you want to delete
+            <strong>{{ deletingUser?.name }}</strong>?          </p>
+
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" @click="closeDeleteModal">
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="delete-confirm-btn"
+              :disabled="deletingId === deletingUser?.id"
+              @click="confirmDeleteUser"
+            >
+              {{ deletingId === deletingUser?.id ? "Deleting..." : "Delete" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </MainLayout>
 </template>
@@ -917,6 +1034,15 @@ onMounted(() => {
       border-color: #8a6d1f;
     }
   }
+
+  &.delete-btn {
+    color: #b3261e;
+
+    &:hover {
+      background: #fbeceb;
+      border-color: #b3261e;
+    }
+  }
 }
 
 .form-modal-backdrop {
@@ -1111,6 +1237,43 @@ onMounted(() => {
 
   &:hover:not(:disabled) {
     background: #1f3f2c;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.delete-modal-content {
+  max-width: 420px;
+}
+
+.delete-confirm-text {
+  font-size: 14px;
+  color: #45493d;
+  line-height: 1.6;
+  margin: 0;
+
+  strong {
+    color: #2b2e24;
+  }
+}
+
+.delete-confirm-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  background: #b3261e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: #8f1e17;
   }
 
   &:disabled {

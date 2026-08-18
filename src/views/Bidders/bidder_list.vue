@@ -11,7 +11,11 @@ import {
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase, base } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -30,15 +34,20 @@ const syncBidders = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      const message = response?.data?.message || "Bidder synced successfully";
-
-      showNotification("success", message);
-
-      await fetchBidders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to sync bidders");
+      showNotification("error", message);
+      return;
     }
+
+    const message = response?.data?.message || "Bidder synced successfully";
+    showNotification("success", message);
+    await fetchBidders();
   } catch (error) {
-    const message = error?.response?.data?.message || "Failed to sync bidders";
+    const message = extractErrorMessage(
+      error?.response?.data,
+      "Failed to sync bidders"
+    );
 
     showNotification("error", message);
   } finally {
@@ -76,7 +85,10 @@ const openViewModal = async (customer_id) => {
 
     viewCustomer.value = response.data.customer || response.data.data || response.data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load bidder details";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load bidder details"
+    );
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -106,7 +118,10 @@ const fetchBidders = async () => {
     Bidders.value = response.data.customers || [];
     totalPages.value = response.data.meta?.last_page || 1;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load Bidders";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load Bidders"
+    );
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -171,16 +186,23 @@ const submitCreate = async () => {
       },
     });
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Bidder created successfully");
-      closeCreateModal();
-      await fetchBidders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to create Bidder");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Bidder created successfully");
+    closeCreateModal();
+    await fetchBidders();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to create Bidder";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to create Bidder"
+    );
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -236,16 +258,23 @@ const submitEdit = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Bidder updated successfully");
-      closeEditModal();
-      await fetchBidders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update Bidder");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Bidder updated successfully");
+    closeEditModal();
+    await fetchBidders();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update Bidder";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to update Bidder"
+    );
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -265,12 +294,19 @@ const deleteBidder = async (Bidder) => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Bidder deleted successfully");
-      await fetchBidders();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to delete Bidder");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Bidder deleted successfully");
+    await fetchBidders();
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to delete Bidder";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to delete Bidder"
+    );
     showNotification("error", message);
   } finally {
     deletingId.value = null;

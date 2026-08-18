@@ -12,6 +12,8 @@ import {
   QuestionCircleOutlined,
 } from "@ant-design/icons-vue";
 
+import { useLoginStore } from "@/stores/login";
+
 defineProps({
   collapsed: {
     type: Boolean,
@@ -20,8 +22,11 @@ defineProps({
 });
 
 const route = useRoute();
+const loginStore = useLoginStore();
 const selectedKeys = ref([route.name]);
 const openKeys = ref([]);
+
+const canView = (permissionName) => loginStore.hasPermission(permissionName);
 
 watch(
   () => route.name,
@@ -40,43 +45,43 @@ watch(
     mode="inline"
     class="menu-list"
   >
-    <a-menu-item key="home" title="Dashboard">
+    <a-menu-item v-if="canView('Dashboard')" key="home" title="Dashboard">
       <router-link :to="{ name: 'home' }">
         <dashboard-outlined />
         <span>Dashboard</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="product_list" title="Product">
+    <a-menu-item v-if="canView('Product')" key="product_list" title="Product">
       <router-link :to="{ name: 'product_list' }">
         <project-outlined />
         <span>Product</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="bidder_list" title="Bidder">
+    <a-menu-item v-if="canView('Bidder')" key="bidder_list" title="Bidder">
       <router-link :to="{ name: 'bidder_list' }">
         <team-outlined />
         <span>Bidder</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="tender" title="Tender">
+    <a-menu-item v-if="canView('Tender')" key="tender" title="Tender">
       <router-link :to="{ name: 'tender' }">
         <file-done-outlined />
         <span>Tender</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="user_manager" title="User Manager">
+    <a-menu-item v-if="canView('User manager')" key="user_manager" title="User Manager">
       <router-link :to="{ name: 'user_manager' }">
         <file-done-outlined />
         <span>User manager</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="role" title="Role">
+    <a-menu-item v-if="canView('Role')" key="role" title="Role">
       <router-link :to="{ name: 'role' }">
         <setting-outlined />
         <span>Role</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="permission" title="Permission">
+    <a-menu-item v-if="canView('Permission')" key="permission" title="Permission">
       <router-link :to="{ name: 'permission' }">
         <setting-outlined />
         <span>Permission</span>

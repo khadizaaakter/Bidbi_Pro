@@ -11,7 +11,11 @@ import {
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase, base } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -30,17 +34,20 @@ const syncProducts = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      const message =
-        response?.data?.message || "Products synced successfully";
-
-      showNotification("success", message);
-
-      await fetchProducts();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to sync products");
+      showNotification("error", message);
+      return;
     }
+
+    const message = response?.data?.message || "Products synced successfully";
+    showNotification("success", message);
+    await fetchProducts();
   } catch (error) {
-    const message =
-      error?.response?.data?.message || "Failed to sync products";
+    const message = extractErrorMessage(
+      error?.response?.data,
+      "Failed to sync products"
+    );
 
     showNotification("error", message);
   } finally {
@@ -97,7 +104,10 @@ const fetchProducts = async () => {
     products.value = response.data.products || [];
     currentPage.value = 1;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load products";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load products"
+    );
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -170,16 +180,23 @@ const submitCreate = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product created successfully");
-      closeCreateModal();
-      await fetchProducts();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to create product");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Product created successfully");
+    closeCreateModal();
+    await fetchProducts();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to create product";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to create product"
+    );
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -203,7 +220,10 @@ const openViewModal = async (product) => {
 
     viewProduct.value = response.data.product || response.data.data || response.data;
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to load product details";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load product details"
+    );
     showNotification("error", message);
     showViewModal.value = false;
   } finally {
@@ -273,16 +293,23 @@ const submitEdit = async () => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product updated successfully");
-      closeEditModal();
-      await fetchProducts();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update product");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Product updated successfully");
+    closeEditModal();
+    await fetchProducts();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message = error.response?.data?.message || "Failed to update product";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to update product"
+    );
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -302,12 +329,19 @@ const deleteProduct = async (product) => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Product deleted successfully");
-      await fetchProducts();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to delete product");
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Product deleted successfully");
+    await fetchProducts();
   } catch (error) {
-    const message = error.response?.data?.message || "Failed to delete product";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to delete product"
+    );
     showNotification("error", message);
   } finally {
     deletingId.value = null;

@@ -6,7 +6,11 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons-vue";
 import MainLayout from "@/components/layouts/main_layout.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase } from "@/utilities/config";
-import { showNotification } from "@/utilities/notification";
+import {
+  showNotification,
+  extractErrorMessage,
+  isErrorResponse,
+} from "@/utilities/notification";
 
 const loginStore = useLoginStore();
 
@@ -25,8 +29,10 @@ const fetchPermissions = async () => {
     permissions.value = response.data.permission || [];
     currentPage.value = 1;
   } catch (error) {
-    const message =
-      error.response?.data?.message || "Failed to load permissions";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to load permissions"
+    );
     showNotification("error", message);
   } finally {
     loading.value = false;
@@ -104,17 +110,26 @@ const submitCreate = async () => {
       },
     });
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Permission created successfully");
-      closeCreateModal();
-      await fetchPermissions();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(
+        response?.data,
+        "Failed to create permission"
+      );
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Permission created successfully");
+    closeCreateModal();
+    await fetchPermissions();
   } catch (error) {
     if (error.response?.status === 422) {
       createErrors.value = error.response.data.errors || {};
     }
-    const message =
-      error.response?.data?.message || "Failed to create permission";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to create permission"
+    );
     showNotification("error", message);
   } finally {
     creating.value = false;
@@ -164,17 +179,26 @@ const submitEdit = async () => {
       }
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Permission updated successfully");
-      closeEditModal();
-      await fetchPermissions();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(
+        response?.data,
+        "Failed to update permission"
+      );
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Permission updated successfully");
+    closeEditModal();
+    await fetchPermissions();
   } catch (error) {
     if (error.response?.status === 422) {
       editErrors.value = error.response.data.errors || {};
     }
-    const message =
-      error.response?.data?.message || "Failed to update permission";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to update permission"
+    );
     showNotification("error", message);
   } finally {
     updating.value = false;
@@ -182,10 +206,22 @@ const submitEdit = async () => {
 };
 
 const deletingId = ref(null);
+const showDeleteModal = ref(false);
+const permissionToDelete = ref(null);
 
-const deletePermission = async (permission) => {
-  if (!window.confirm(`Are you sure you want to delete "${permission.name}"?`))
-    return;
+const openDeleteModal = (permission) => {
+  permissionToDelete.value = permission;
+  showDeleteModal.value = true;
+};
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  permissionToDelete.value = null;
+};
+
+const confirmDelete = async () => {
+  const permission = permissionToDelete.value;
+  if (!permission) return;
 
   deletingId.value = permission.id;
 
@@ -195,13 +231,23 @@ const deletePermission = async (permission) => {
       loginStore.getTokenConfig
     );
 
-    if (response?.status >= 200 && response?.status < 300) {
-      showNotification("success", "Permission deleted successfully");
-      await fetchPermissions();
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(
+        response?.data,
+        "Failed to delete permission"
+      );
+      showNotification("error", message);
+      return;
     }
+
+    showNotification("success", "Permission deleted successfully");
+    closeDeleteModal();
+    await fetchPermissions();
   } catch (error) {
-    const message =
-      error.response?.data?.message || "Failed to delete permission";
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to delete permission"
+    );
     showNotification("error", message);
   } finally {
     deletingId.value = null;
@@ -240,7 +286,7 @@ onMounted(fetchPermissions);
             <tr>
               <th>SL</th>
               <th>Name</th>
-              <th>Created At</th>
+              <!-- <th>Created At</th> -->
               <th>Action</th>
             </tr>
           </thead>
@@ -261,7 +307,7 @@ onMounted(fetchPermissions);
               >
                 <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td>{{ permission.name }}</td>
-                <td>{{ formatDate(permission.created_at) }}</td>
+                <!-- <td>{{ formatDate(permission.created_at) }}</td> -->
                 <td>
                   <div class="action-buttons">
                     <button
@@ -277,7 +323,7 @@ onMounted(fetchPermissions);
                       class="action-btn delete-btn"
                       title="Delete"
                       :disabled="deletingId === permission.id"
-                      @click="deletePermission(permission)"
+                      @click="openDeleteModal(permission)"
                     >
                       <DeleteOutlined />
                     </button>
@@ -387,6 +433,39 @@ onMounted(fetchPermissions);
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div
+        v-if="showDeleteModal"
+        class="form-modal-backdrop"
+        @click="closeDeleteModal"
+      >
+        <div class="form-modal-content delete-modal-content" @click.stop>
+          <div class="form-modal-header">
+            <h2>Delete Permission</h2>
+            <button type="button" class="form-modal-close" @click="closeDeleteModal">
+              &times;
+            </button>
+          </div>
+
+          <p class="delete-confirm-text">
+            Are you sure you want to delete "{{ permissionToDelete?.name }}"?
+          </p>
+
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" @click="closeDeleteModal">
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="delete-confirm-btn"
+              :disabled="deletingId === permissionToDelete?.id"
+              @click="confirmDelete"
+            >
+              {{ deletingId === permissionToDelete?.id ? "Deleting..." : "Yes" }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -704,6 +783,38 @@ onMounted(fetchPermissions);
 
   &:hover:not(:disabled) {
     background: #1f3f2c;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.delete-modal-content {
+  max-width: 400px;
+}
+
+.delete-confirm-text {
+  font-size: 14px;
+  color: #2b2e24;
+  margin: 0 0 8px;
+}
+
+.delete-confirm-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: none;
+  background: #b3261e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: #8f1e18;
   }
 
   &:disabled {
