@@ -71,6 +71,11 @@ const router = createRouter({
   routes,
 });
 
+export const firstAccessibleRouteName = (loginStore) =>
+  routes.find(
+    (route) => route.meta?.permission && loginStore.hasPermission(route.meta.permission)
+  )?.name;
+
 router.beforeEach((to) => {
   if (!to.meta.permission) return true;
 
@@ -78,7 +83,8 @@ router.beforeEach((to) => {
   if (!loginStore.token) return { name: "login" };
 
   if (!loginStore.hasPermission(to.meta.permission)) {
-    return to.name === "home" ? { name: "login" } : { name: "home" };
+    const fallbackName = firstAccessibleRouteName(loginStore);
+    return { name: fallbackName || "login" };
   }
 
   return true;

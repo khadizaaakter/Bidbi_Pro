@@ -47,6 +47,7 @@ import { useRouter } from "vue-router";
 
 import { useLoginStore } from "@/stores/login";
 import { showNotification } from "@/utilities/notification";
+import { firstAccessibleRouteName } from "@/router";
 
 const router = useRouter();
 const loginStore = useLoginStore();
@@ -62,7 +63,7 @@ const handleLogin = async () => {
   try {
     const data = await loginStore.login(email.value, password.value);
     showNotification("success", data.message || "Login Success");
-    router.push({ name: "home" });
+    router.push({ name: firstAccessibleRouteName(loginStore) || "login" });
   } catch (error) {
     const message = error.response?.data?.message || "Invalid email or password";
     showNotification("error", message);

@@ -72,7 +72,7 @@ watch(
         <span>Tender</span>
       </router-link>
     </a-menu-item>
-    <a-menu-item key="invoice" title="Invoice">
+    <a-menu-item v-if="canView('Invoice')" key="invoice" title="Invoice">
       <a href="https://apps.acibd.com/parice/admin/" target="_blank" rel="noopener noreferrer">
         <euro-circle-outlined />
         <span>Invoice</span>
