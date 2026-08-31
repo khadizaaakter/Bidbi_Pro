@@ -8,8 +8,11 @@ import {
   TeamOutlined,
   FileDoneOutlined,
   BarChartOutlined,
-  SettingOutlined,
   QuestionCircleOutlined,
+  EuroCircleOutlined,
+  UserSwitchOutlined,
+  IdcardOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons-vue";
 
 import { useLoginStore } from "@/stores/login";
@@ -69,21 +72,27 @@ watch(
         <span>Tender</span>
       </router-link>
     </a-menu-item>
+    <a-menu-item key="invoice" title="Invoice">
+      <a href="https://apps.acibd.com/parice/admin/" target="_blank" rel="noopener noreferrer">
+        <euro-circle-outlined />
+        <span>Invoice</span>
+      </a>
+    </a-menu-item>
     <a-menu-item v-if="canView('User manager')" key="user_manager" title="User Manager">
       <router-link :to="{ name: 'user_manager' }">
-        <file-done-outlined />
+        <user-switch-outlined />
         <span>User manager</span>
       </router-link>
     </a-menu-item>
     <a-menu-item v-if="canView('Role')" key="role" title="Role">
       <router-link :to="{ name: 'role' }">
-        <setting-outlined />
+        <idcard-outlined />
         <span>Role</span>
       </router-link>
     </a-menu-item>
     <a-menu-item v-if="canView('Permission')" key="permission" title="Permission">
       <router-link :to="{ name: 'permission' }">
-        <setting-outlined />
+        <safety-outlined />
         <span>Permission</span>
       </router-link>
     </a-menu-item>
