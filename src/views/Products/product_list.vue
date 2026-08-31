@@ -6,6 +6,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   RedoOutlined,
+  CloseOutlined,
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
@@ -250,6 +251,7 @@ const emptyEditForm = () => ({
 });
 
 const editForm = ref(emptyEditForm());
+const editImageRemoved = ref(false);
 
 const openEditModal = (product) => {
   editingProductId.value = product.id;
@@ -260,6 +262,7 @@ const openEditModal = (product) => {
     image: null,
   };
   editErrors.value = {};
+  editImageRemoved.value = false;
   editImagePreview.value = product.image ? getImageUrl(product.image) : null;
   showEditModal.value = true;
 };
@@ -271,7 +274,14 @@ const closeEditModal = () => {
 const onEditImageChange = (event) => {
   const file = event.target.files?.[0] || null;
   editForm.value.image = file;
+  editImageRemoved.value = false;
   editImagePreview.value = file ? URL.createObjectURL(file) : editImagePreview.value;
+};
+
+const removeEditImage = () => {
+  editForm.value.image = null;
+  editImagePreview.value = null;
+  editImageRemoved.value = true;
 };
 
 const submitEdit = async () => {
@@ -285,6 +295,8 @@ const submitEdit = async () => {
     formData.append("status", editForm.value.status);
     if (editForm.value.image) {
       formData.append("image", editForm.value.image);
+    } else if (editImageRemoved.value) {
+      formData.append("remove_image", "1");
     }
 
     const response = await axios.post(
@@ -443,14 +455,14 @@ onMounted(fetchProducts);
                     >
                       <EyeOutlined />
                     </button>
-                    <!-- <button
+                    <button
                       type="button"
                       class="action-btn edit-btn"
                       title="Edit"
                       @click="openEditModal(product)"
                     >
                       <EditOutlined />
-                    </button> -->
+                    </button>
                     <!-- <button
                       type="button"
                       class="action-btn delete-btn"
@@ -697,12 +709,21 @@ onMounted(fetchProducts);
             <div class="form-row">
               <label>Image</label>
               <input type="file" accept="image/*" @change="onEditImageChange" />
-              <img
-                v-if="editImagePreview"
-                :src="editImagePreview"
-                alt="Preview"
-                class="form-image-preview"
-              />
+              <div v-if="editImagePreview" class="form-image-preview-wrap">
+                <img
+                  :src="editImagePreview"
+                  alt="Preview"
+                  class="form-image-preview"
+                />
+                <button
+                  type="button"
+                  class="form-image-remove-btn"
+                  title="Remove image"
+                  @click="removeEditImage"
+                >
+                  <CloseOutlined />
+                </button>
+              </div>
               <span v-if="editErrors.image" class="field-error">{{
                 editErrors.image[0]
               }}</span>
@@ -1185,7 +1206,36 @@ onMounted(fetchProducts);
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid #e7e4d6;
+}
+
+.form-image-preview-wrap {
+  position: relative;
+  display: inline-block;
   margin-top: 8px;
+}
+
+.form-image-remove-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #6b7461;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+
+.form-image-remove-btn:hover {
+  background: #f7d7d7;
+  color: #c0392b;
+  border-color: #c0392b;
 }
 
 .form-actions {
