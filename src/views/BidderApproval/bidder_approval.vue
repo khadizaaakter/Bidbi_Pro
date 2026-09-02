@@ -110,6 +110,11 @@ const onSearchInput = () => {
 };
 
 // top 3 bidders modal
+const bidderPositionLabels = ["Highest Bid", "Second Highest", "Third Highest"];
+
+const bidderRoleLabel = (bidder) =>
+  bidderPositionLabels[bidder.position - 1] || `Backup ${bidder.position - 1}`;
+
 const showBiddersModal = ref(false);
 const biddersLoading = ref(false);
 const biddersTender = ref(null);
@@ -397,7 +402,7 @@ onMounted(() => {
               >
                 <div class="bidder-card-info">
                   <span class="bidder-role" :class="bidder.role">
-                    {{ bidder.role === "primary" ? "Highest Bid" : `Backup ${bidder.position - 1}` }}
+                    {{ bidderRoleLabel(bidder) }}
                   </span>
 
                   <div class="bidder-name-row">
@@ -406,9 +411,9 @@ onMounted(() => {
                   </div>
 
                   <div class="bidder-meta">
-                    <span>{{ bidder.customer_code }}</span>
-                    <span v-if="bidder.phone">{{ bidder.phone }}</span>
-                    <span class="bidder-amount">{{ bidder.amount }}</span>
+                    <span><span class="meta-label">Bidder ID:</span> {{ bidder.customer_code }}</span>
+                    <span v-if="bidder.phone"><span class="meta-label">Phone:</span> {{ bidder.phone }}</span>
+                    <span class="bidder-amount"><span class="meta-label">Amount:</span> {{ bidder.amount }}</span>
                   </div>
                 </div>
               </div>
@@ -866,12 +871,17 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #6b7461;
+  color: #1a1a1a;
 }
 
 .bidder-amount {
   font-weight: 700;
-  color: #285239;
+  color: #1a1a1a;
+}
+
+.meta-label {
+  font-weight: 600;
+  color: #1a1a1a;
 }
 
 .delete-confirm-text {
