@@ -1,11 +1,12 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import axios from "axios";
 import {
   EditOutlined,
   DeleteOutlined,
   RedoOutlined,
   EyeOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
@@ -19,13 +20,13 @@ import {
 
 const loginStore = useLoginStore();
 
-const Bidders = ref([]);
+const allBidders = ref([]);
 const loading = ref(false);
-const syyncing = ref(false);
+const syncing = ref(false);
 
 // sync bidder
 const syncBidders = async () => {
-  syyncing.value = true;
+  syncing.value = true;
 
   try {
     const response = await axios.post(
@@ -51,21 +52,56 @@ const syncBidders = async () => {
 
     showNotification("error", message);
   } finally {
-    syyncing.value = false;
+    syncing.value = false;
   }
 };
 
 const pageSize = 25;
 const currentPage = ref(1);
-const totalPages = ref(1);
 
 const searchQuery = ref("");
 const statusFilter = ref("");
 
+const searchableText = (bidder) =>
+  [
+    bidder.name,
+    bidder.customer_code,
+    bidder.phone,
+    bidder.email,
+    bidder.address,
+    bidder.company_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+const matchesSearch = (bidder) => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return true;
+
+  const words = query.split(/\s+/).filter(Boolean);
+  const haystack = searchableText(bidder);
+
+  return words.every((word) => haystack.includes(word));
+};
+
+const filteredBidders = () =>
+  allBidders.value.filter(
+    (bidder) =>
+      (!statusFilter.value || bidder.status === statusFilter.value) &&
+      matchesSearch(bidder)
+  );
+
+const totalPages = () => Math.max(1, Math.ceil(filteredBidders().length / pageSize));
+
+const paginatedBidders = () => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredBidders().slice(start, start + pageSize);
+};
+
 const goToPage = (page) => {
-  if (page < 1 || page > totalPages.value) return;
+  if (page < 1 || page > totalPages()) return;
   currentPage.value = page;
-  fetchBidders();
 };
 
 const showViewModal = ref(false);
@@ -108,15 +144,12 @@ const fetchBidders = async () => {
     const response = await axios.get(`${apiBase}/admin/customers`, {
       ...loginStore.getTokenConfig,
       params: {
-        page: currentPage.value,
-        per_page: pageSize,
-        search: searchQuery.value || undefined,
-        status: statusFilter.value || undefined,
+        page: 1,
+        per_page: 100000,
       },
     });
 
-    Bidders.value = response.data.customers || [];
-    totalPages.value = response.data.meta?.last_page || 1;
+    allBidders.value = response.data.customers || [];
   } catch (error) {
     const message = extractErrorMessage(
       error.response?.data,
@@ -130,13 +163,6 @@ const fetchBidders = async () => {
 
 const onFilterChange = () => {
   currentPage.value = 1;
-  fetchBidders();
-};
-
-let searchDebounce = null;
-const onSearchInput = () => {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(onFilterChange, 400);
 };
 
 const showCreateModal = ref(false);
@@ -313,7 +339,65 @@ const deleteBidder = async (Bidder) => {
   }
 };
 
-onMounted(fetchBidders);
+const statusOptions = ["Active", "Inactive"];
+const openStatusId = ref(null);
+const statusUpdatingId = ref(null);
+
+const toggleStatusDropdown = (bidder) => {
+  openStatusId.value = openStatusId.value === bidder.id ? null : bidder.id;
+};
+
+const closeStatusDropdown = () => {
+  openStatusId.value = null;
+};
+
+const selectStatus = async (bidder, status) => {
+  closeStatusDropdown();
+
+  if (bidder.status === status) return;
+
+  statusUpdatingId.value = bidder.id;
+
+  try {
+    const response = await axios.patch(
+      `${apiBase}/admin/customers/${bidder.id}/status`,
+      { status },
+      loginStore.getTokenConfig
+    );
+
+    if (isErrorResponse(response)) {
+      const message = extractErrorMessage(response?.data, "Failed to update status");
+      showNotification("error", message);
+      return;
+    }
+
+    bidder.status = response.data.customer?.status || status;
+    showNotification("success", "Bidder status updated successfully");
+  } catch (error) {
+    const message = extractErrorMessage(
+      error.response?.data,
+      "Failed to update status"
+    );
+    showNotification("error", message);
+  } finally {
+    statusUpdatingId.value = null;
+  }
+};
+
+const onDocumentClick = (event) => {
+  if (openStatusId.value !== null && !event.target.closest(".status-badge-wrap")) {
+    closeStatusDropdown();
+  }
+};
+
+onMounted(() => {
+  fetchBidders();
+  document.addEventListener("click", onDocumentClick);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocumentClick);
+});
 </script>
 
 <template>
@@ -329,8 +413,8 @@ onMounted(fetchBidders);
             v-model="searchQuery"
             type="text"
             class="search-input"
-            placeholder="Search by name or code..."
-            @input="onSearchInput"
+            placeholder="Search by name, code, phone, email, address..."
+            @input="onFilterChange"
           />
 
           <select v-model="statusFilter" class="status-select" @change="onFilterChange">
@@ -343,7 +427,8 @@ onMounted(fetchBidders);
             + Create
           </button> -->
           <button type="button" class="sync-btn" :disabled="syncing" @click="syncBidders">
-            <RedoOutlined />
+            <LoadingOutlined v-if="syncing" />
+            <RedoOutlined v-else />
             {{ syncing ? "Syncing..." : "Sync Bidders" }}
           </button>
         </div>
@@ -361,18 +446,18 @@ onMounted(fetchBidders);
               <th>Address</th>
               <th>Company</th>
               <th>Status</th>
-              <th>Action</th>
+              <!-- <th>Action</th> -->
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7" class="state-cell">Loading...</td>
+              <td colspan="8" class="state-cell">Loading...</td>
             </tr>
-            <tr v-else-if="!Bidders.length">
-              <td colspan="7" class="state-cell">No bidders found</td>
+            <tr v-else-if="!paginatedBidders().length">
+              <td colspan="8" class="state-cell">No bidders found</td>
             </tr>
             <template v-else>
-              <tr v-for="(bidder, index) in Bidders" :key="bidder.id">
+              <tr v-for="(bidder, index) in paginatedBidders()" :key="bidder.id">
                 <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                 <td>{{ bidder.customer_code }}</td>
                 <td>{{ bidder.name }}</td>
@@ -381,20 +466,52 @@ onMounted(fetchBidders);
                 <td>{{ bidder.address || "-" }}</td>
                 <td>{{ bidder.company_name || "-" }}</td>
                 <td>
-                  <span :class="['status-badge', bidder.status?.toLowerCase()]">
-                    {{ bidder.status }}
-                  </span>
+                  <div class="status-badge-wrap">
+                    <span
+                      :class="[
+                        'status-badge',
+                        'status-badge-clickable',
+                        bidder.status?.toLowerCase(),
+                      ]"
+                      @click.stop="toggleStatusDropdown(bidder)"
+                    >
+                      <span class="status-dot"></span>
+                      {{ statusUpdatingId === bidder.id ? "Saving..." : bidder.status }}
+                      <svg class="status-caret" width="10" height="6" viewBox="0 0 10 6" fill="none">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+
+                    <ul v-if="openStatusId === bidder.id" class="status-dropdown">
+                      <li
+                        v-for="option in statusOptions"
+                        :key="option"
+                        :class="[
+                          'status-dropdown-item',
+                          option.toLowerCase(),
+                          { selected: bidder.status === option },
+                        ]"
+                        @click.stop="selectStatus(bidder, option)"
+                      >
+                        <span class="status-dot"></span>
+                        {{ option }}
+                        <svg v-if="bidder.status === option" class="status-check" width="12" height="12" viewBox="0 0 16 16" fill="none">
+                          <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </li>
+                    </ul>
+                  </div>
                 </td>
-                <td>
-                  <div class="action-buttons">
-                    <button
+                <!-- <td> -->
+                  <!-- <div class="action-buttons"> -->
+                    <!-- <button
                       type="button"
                       class="action-btn view-btn"
                       title="Show"
                       @click="openViewModal(bidder.id)"
                     >
                       <EyeOutlined />
-                    </button>
+                    </button> -->
                     <!-- <button
                       type="button"
                       class="action-btn edit-btn"
@@ -412,14 +529,14 @@ onMounted(fetchBidders);
                     >
                       <DeleteOutlined />
                     </button> -->
-                  </div>
-                </td>
+                  <!-- </div> -->
+                <!-- </td> -->
               </tr>
             </template>
           </tbody>
         </table>
 
-        <div v-if="!loading && Bidders.length" class="pagination">
+        <div v-if="!loading && filteredBidders().length" class="pagination">
           <button
             type="button"
             class="page-btn"
@@ -429,12 +546,12 @@ onMounted(fetchBidders);
             Prev
           </button>
 
-          <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+          <span class="page-info">Page {{ currentPage }} of {{ totalPages() }}</span>
 
           <button
             type="button"
             class="page-btn"
-            :disabled="currentPage === totalPages"
+            :disabled="currentPage === totalPages()"
             @click="goToPage(currentPage + 1)"
           >
             Next
@@ -738,6 +855,11 @@ onMounted(fetchBidders);
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -745,6 +867,11 @@ onMounted(fetchBidders);
     color: #2b2e24;
     padding: 12px 16px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {
@@ -914,22 +1041,138 @@ onMounted(fetchBidders);
   }
 }
 
-.status-badge {
+.status-badge-wrap {
+  position: relative;
   display: inline-block;
-  padding: 4px 12px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   text-transform: capitalize;
+  border: 1px solid transparent;
+  line-height: 1;
 
   &.active {
     background: #e7f3ea;
     color: #285239;
+    border-color: #cde7d5;
+
+    .status-dot {
+      background: #2f9e5c;
+    }
   }
 
   &.inactive {
     background: #fbeceb;
     color: #b3261e;
+    border-color: #f4d4d1;
+
+    .status-dot {
+      background: #d64541;
+    }
+  }
+}
+
+.status-badge-clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+
+  &:hover {
+    box-shadow: 0 3px 10px -3px rgba(20, 22, 16, 0.25);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-caret {
+  opacity: 0.6;
+  margin-left: 1px;
+}
+
+.status-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 130px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e7e4d6;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px -12px rgba(40, 82, 57, 0.35);
+  animation: status-dropdown-in 0.12s ease-out;
+}
+
+@keyframes status-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  .status-check {
+    margin-left: auto;
+  }
+
+  &:hover {
+    background: #f6f7f0;
+  }
+
+  &.active {
+    color: #285239;
+
+    .status-dot {
+      background: #2f9e5c;
+    }
+
+    &.selected {
+      background: #e7f3ea;
+    }
+  }
+
+  &.inactive {
+    color: #b3261e;
+
+    .status-dot {
+      background: #d64541;
+    }
+
+    &.selected {
+      background: #fbeceb;
+    }
   }
 }
 

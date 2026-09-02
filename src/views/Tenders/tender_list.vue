@@ -7,6 +7,9 @@ import {
   RedoOutlined,
   EyeOutlined,
   FileTextOutlined,
+  SearchOutlined,
+  BarcodeOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
@@ -110,6 +113,8 @@ const openBidderModal = async (tender) => {
     bidderLoading.value = false;
   }
 };
+const isBidderTenderAwarded = () => !!bidderTender.value?.winner_id;
+
 const closeBidderModal = () => {
   showBidderModal.value = false;
   bidderLoading.value = false;
@@ -312,6 +317,67 @@ const toDatetimeLocal = (apiDateTime) => {
   return `${datePart}T${timePart.slice(0, 5)}`;
 };
 
+const monthNames = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// "2026-08-21 17:00:00" -> "21 Aug 2026, 05:00 PM BDT"
+const formatClosingDate = (apiDateTime) => {
+  if (!apiDateTime) return "-";
+
+  const [datePart, timePart = "00:00:00"] = apiDateTime.split(" ");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour = 0, minute = 0] = timePart.split(":").map(Number);
+
+  if (!year || !month || !day) return apiDateTime;
+
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const minuteStr = String(minute).padStart(2, "0");
+
+  return `${day} ${monthNames[month - 1]} ${year}, ${hour12}:${minuteStr} ${period}`;
+};
+
+// "12500.5" -> "12,500.50"
+const formatPrice = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "-";
+
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const parseApiDateTime = (value) => {
+  if (!value) return null;
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+// closing countdown pill for the detail view, e.g. "2d 4h left" / "38m left" / "Closed"
+const tenderCountdown = (tender) => {
+  const target = parseApiDateTime(tender?.end_date || tender?.closing_date);
+  if (!target) return null;
+
+  const diffMs = target.getTime() - Date.now();
+  if (diffMs <= 0) return { label: "Closed", urgent: false, closed: true };
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  let label;
+  if (days > 0) label = `${days}d ${hours}h left`;
+  else if (hours > 0) label = `${hours}h ${minutes}m left`;
+  else label = `${minutes}m left`;
+
+  return { label, urgent: days === 0 && hours < 6, closed: false };
+};
+
 // submit create tender
 const submitCreate = async () => {
   creating.value = true;
@@ -364,6 +430,7 @@ const emptyEditForm = () => ({
   ref_code: "",
   qty: "",
   closing_date: "",
+  notify: true,
 });
 
 const editForm = ref(emptyEditForm());
@@ -375,6 +442,7 @@ const openEditModal = (Tender) => {
     ref_code: Tender.ref_code || "",
     qty: Tender.quantity || "",
     closing_date: toDatetimeLocal(Tender.closing_date),
+    notify: true,
   };
   editErrors.value = {};
   showEditModal.value = true;
@@ -393,6 +461,7 @@ const submitEdit = async () => {
     const data = new URLSearchParams();
     data.append("qty", editForm.value.qty);
     data.append("closing_date", toApiDateTime(editForm.value.closing_date));
+    data.append("notify", editForm.value.notify ? "1" : "0");
 
     const response = await axios.put(
       `${apiBase}/admin/tenders/${editingTenderId.value}`,
@@ -512,18 +581,22 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="toolbar-right">
-          <input
-            v-model="searchQuery"
-            type="text"
-            class="search-input"
-            placeholder="Search by name or code..."
-            @input="onSearchInput"
-          />
+          <div class="search-box">
+            <SearchOutlined class="search-icon" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="search-input"
+              placeholder="Search by name or code..."
+              @input="onSearchInput"
+            />
+          </div>
 
           <select v-model="statusFilter" class="status-select" @change="onFilterChange">
             <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+            <option value="Open">Open</option>
+            <option value="Closed">Closed</option>
+            <option value="Awarded">Awarded</option>
           </select>
 
           <button type="button" class="create-btn" @click="openCreateModal">
@@ -549,7 +622,7 @@ onBeforeUnmount(() => {
               <th>Quantity</th>
               <th>Closing Date</th>
               <th>CutOff Label</th>
-              <th>My Bid</th>
+              <!-- <th>My Bid</th> -->
               <th>Bidder Sheet</th>
               <th>Status</th>
               <th>Action</th>
@@ -557,10 +630,10 @@ onBeforeUnmount(() => {
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7" class="state-cell">Loading...</td>
+              <td colspan="12" class="state-cell">Loading...</td>
             </tr>
             <tr v-else-if="!Tenders.length">
-              <td colspan="7" class="state-cell">No tenders found</td>
+              <td colspan="12" class="state-cell">No tenders found</td>
             </tr>
             <template v-else>
               <tr v-for="(tender, index) in Tenders" :key="tender.tender_id">
@@ -571,9 +644,9 @@ onBeforeUnmount(() => {
                 <td class="text-right">{{ tender.base_price }}</td>
                 <td>{{ tender.unit || "-" }}</td>
                 <td class="text-right">{{ tender.quantity || "-" }}</td>
-                <td>{{ tender.closing_date || "-" }}</td>
+                <td>{{ formatClosingDate(tender.closing_date) }}</td>
                 <td>{{ tender.cutoff_label || "-" }}</td>
-                <td>{{ tender.my_bid || "-" }}</td>
+                <!-- <td>{{ tender.my_bid || "-" }}</td> -->
                 <td>
                   <button
                     type="button"
@@ -658,56 +731,68 @@ onBeforeUnmount(() => {
           <div v-if="viewLoading" class="state-cell">Loading...</div>
 
           <div v-else-if="viewTender" class="view-details">
-            <div class="view-row">
-              <span class="view-label">Reference Code</span>
-              <span class="view-value">{{ viewTender.ref_code }}</span>
+            <div class="view-header">
+              <!-- <div class="view-image view-image-placeholder">
+                <FileTextOutlined />
+              </div> -->
+
+              <div class="view-header-info">
+                <span class="view-header-name">{{ viewTender.product?.name || "-" }}</span>
+                <span class="view-header-code">
+                  <BarcodeOutlined />
+                  {{ viewTender.ref_code }}
+                </span>
+                <span :class="['status-badge', viewTender.status?.toLowerCase()]">
+                  {{ viewTender.status }}
+                </span>
+              </div>
             </div>
 
-            <div class="view-row">
-              <span class="view-label">Product</span>
-              <span class="view-value"
-                >{{ viewTender.product?.product_code }} -
-                {{ viewTender.product?.name }}</span
+            <div v-if="tenderCountdown(viewTender)" class="view-row">
+              <span class="view-label">Time Remaining</span>
+              <span
+                :class="['countdown-pill', { urgent: tenderCountdown(viewTender).urgent, closed: tenderCountdown(viewTender).closed }]"
               >
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Base Price</span>
-              <span class="view-value">{{
-                Number(viewTender.product?.base_price).toFixed(2)
-              }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Unit</span>
-              <span class="view-value">{{ viewTender.product?.unit || "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Quantity</span>
-              <span class="view-value">{{ viewTender.quantity_label || "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Closing Date</span>
-              <span class="view-value">{{ viewTender.end_date_label || "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">My Bid</span>
-              <span class="view-value">{{ viewTender.my_bid ?? "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Total Bidders</span>
-              <span class="view-value">{{ viewTender.total_bidders ?? "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Status</span>
-              <span :class="['status-badge', viewTender.status?.toLowerCase()]">
-                {{ viewTender.status }}
+                <ClockCircleOutlined />
+                {{ tenderCountdown(viewTender).label }}
               </span>
+            </div>
+
+            <div class="view-grid">
+              <div class="view-row">
+                <span class="view-label">Product Code</span>
+                <span class="view-value">{{ viewTender.product?.product_code || "-" }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Base Price</span>
+                <span class="view-value">{{ formatPrice(viewTender.product?.base_price) }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Unit</span>
+                <span class="view-value">{{ viewTender.product?.unit || "-" }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Quantity</span>
+                <span class="view-value">{{ viewTender.quantity_label || "-" }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Closing Date</span>
+                <span class="view-value">{{ viewTender.end_date_label || "-" }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Total Bidders</span>
+                <span class="view-value">{{ viewTender.total_bidders ?? "-" }}</span>
+              </div>
+
+              <div v-if="viewTender.winner_id" class="view-row">
+                <span class="view-label">Winner</span>
+                <span class="view-value">{{ viewTender.winner_name || viewTender.winner_id }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -736,16 +821,19 @@ onBeforeUnmount(() => {
                 <span class="view-value">{{ bidderTender?.product_name || "-" }}</span>
               </div>
 
-              <!-- <div class="view-row">
-                <span class="view-label">Status</span>
-                <span :class="['status-badge', bidderTender?.status?.toLowerCase()]">
-                  {{ bidderTender?.status || "-" }}
-                </span>
-              </div> -->
-
               <div class="view-row">
                 <span class="view-label">Total Bidders</span>
                 <span class="view-value">{{ totalBidders }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Winner</span>
+                <span class="view-value">
+                  <template v-if="bidderTender?.winner_id">
+                    {{ bidderTender.winner_id }} - {{ bidderTender.winner_name || "-" }}
+                  </template>
+                  <template v-else>-</template>
+                </span>
               </div>
             </div>
 
@@ -757,32 +845,28 @@ onBeforeUnmount(() => {
                     <th>Bidder Code</th>
                     <th>Bidder</th>
                     <th>Phone</th>
-                    <th>Amount</th>
-                    <th>Winner id</th>
+                    <th v-if="isBidderTenderAwarded()">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-if="!bidders.length">
-                    <td colspan="8" class="state-cell">No bidders yet</td>
+                    <td :colspan="isBidderTenderAwarded() ? 5 : 4" class="state-cell">
+                      No bidders yet
+                    </td>
                   </tr>
                   <template v-else>
                     <tr
                       v-for="(bidder, index) in bidders"
-                      :key="bidder.customer_id || bidder.id || index"
-                      :class="{
-                        'winner-row':
-                          bidderTender?.winner_id &&
-                          (bidder.customer_id || bidder.id) === bidderTender.winner_id,
-                      }"
+                      :key="bidder.bid_id || index"
+                      :class="{ 'winner-row': bidder.is_winner }"
                     >
                       <td>{{ index + 1 }}</td>
                       <td>{{ bidder.customer_code || "-" }}</td>
-                      <td>{{ bidder.name || bidder.customer_name || "-" }}</td>
+                      <td>{{ bidder.customer_name || "-" }}</td>
                       <td>{{ bidder.phone || "-" }}</td>
-                      <td class="text-right">
-                        {{ bidder.amount || "-" }}
+                      <td v-if="isBidderTenderAwarded()" class="text-right">
+                        {{ bidder.is_winner ? bidder.amount ?? "-" : "-" }}
                       </td>
-                      <td class="text-right">{{ bidderTender?.winner_id || "-" }}</td>
                     </tr>
                   </template>
                 </tbody>
@@ -943,6 +1027,16 @@ onBeforeUnmount(() => {
               }}</span>
             </div>
 
+            <div class="form-row form-row-checkbox">
+              <label class="checkbox-label">
+                <input v-model="editForm.notify" type="checkbox" />
+                Notify Bidders
+              </label>
+              <span v-if="editErrors.notify" class="field-error">{{
+                editErrors.notify[0]
+              }}</span>
+            </div>
+
             <div class="form-actions">
               <button type="button" class="cancel-btn" @click="closeEditModal">
                 Cancel
@@ -1035,8 +1129,25 @@ onBeforeUnmount(() => {
   }
 }
 
-.search-input {
+.search-box {
+  position: relative;
   width: 240px;
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: #a7ab9b;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding-left: 36px;
+  box-sizing: border-box;
 }
 
 .status-select {
@@ -1084,6 +1195,11 @@ onBeforeUnmount(() => {
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -1091,6 +1207,11 @@ onBeforeUnmount(() => {
     color: #2b2e24;
     padding: 12px 16px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {
@@ -1268,14 +1389,19 @@ onBeforeUnmount(() => {
   font-weight: 700;
   text-transform: capitalize;
 
-  &.active {
+  &.open {
     background: #e7f3ea;
     color: #285239;
   }
 
-  &.inactive {
+  &.closed {
     background: #fbeceb;
     color: #b3261e;
+  }
+
+  &.awarded {
+    background: #eaf1fb;
+    color: #1d4ed8;
   }
 }
 
@@ -1353,6 +1479,90 @@ onBeforeUnmount(() => {
 .view-value {
   font-size: 14px;
   color: #2b2e24;
+}
+
+.view-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #f0efe4;
+}
+
+.view-image {
+  flex-shrink: 0;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #e7e4d6;
+}
+
+.view-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f7f0;
+  color: #285239;
+  font-size: 26px;
+}
+
+.view-header-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.view-header-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #2b2e24;
+}
+
+.view-header-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7461;
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.countdown-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #eef3ea;
+  color: #285239;
+  font-size: 12px;
+  font-weight: 700;
+
+  &.urgent {
+    background: #fdf0d9;
+    color: #a05a00;
+  }
+
+  &.closed {
+    background: #f6f7f0;
+    color: #8a9080;
+  }
+}
+
+@media (max-width: 640px) {
+  .view-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .create-form {
@@ -1594,6 +1804,7 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
+  .search-box,
   .search-input,
   .status-select,
   .create-btn {
@@ -1740,6 +1951,11 @@ onBeforeUnmount(() => {
     text-align: left;
     padding: 10px 14px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -1747,6 +1963,11 @@ onBeforeUnmount(() => {
     color: #2b2e24;
     padding: 10px 14px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {

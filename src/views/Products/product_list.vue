@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
   RedoOutlined,
   CloseOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
@@ -22,11 +23,11 @@ const loginStore = useLoginStore();
 
 const products = ref([]);
 const loading = ref(false);
-const syyncing = ref(false);
+const syncing = ref(false);
 
 // sync product
 const syncProducts = async () => {
-  syyncing.value = true;
+  syncing.value = true;
 
   try {
     const response = await axios.post(
@@ -52,7 +53,7 @@ const syncProducts = async () => {
 
     showNotification("error", message);
   } finally {
-    syyncing.value = false;
+    syncing.value = false;
   }
 };
 
@@ -77,6 +78,7 @@ const currentPage = ref(1);
 
 const searchQuery = ref("");
 const statusFilter = ref("");
+const unitFilter = ref("");
 
 const getTotalPages = (items) => Math.max(1, Math.ceil(items.length / pageSize));
 
@@ -102,7 +104,12 @@ const fetchProducts = async () => {
       },
     });
 
-    products.value = response.data.products || [];
+    const allProducts = response.data.products || [];
+    const unit = unitFilter.value.trim().toLowerCase();
+
+    products.value = unit
+      ? allProducts.filter((product) => (product.unit || "").trim().toLowerCase() === unit)
+      : allProducts;
     currentPage.value = 1;
   } catch (error) {
     const message = extractErrorMessage(
@@ -386,6 +393,12 @@ onMounted(fetchProducts);
             <option value="Inactive">Inactive</option>
           </select>
 
+          <select v-model="unitFilter" class="status-select" @change="fetchProducts">
+            <option value="">All Units</option>
+            <option value="Bag">Bag</option>
+            <option value="kg">KG</option>
+          </select>
+
           <!-- <button type="button" class="create-btn" @click="openCreateModal">+ Create</button> -->
           <button
             type="button"
@@ -393,7 +406,8 @@ onMounted(fetchProducts);
             :disabled="syncing"
             @click="syncProducts"
           >
-            <RedoOutlined />
+            <LoadingOutlined v-if="syncing" />
+            <RedoOutlined v-else />
             {{ syncing ? "Syncing..." : "Sync Products" }}
           </button>
         </div>
@@ -415,10 +429,10 @@ onMounted(fetchProducts);
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7" class="state-cell">Loading...</td>
+              <td colspan="8" class="state-cell">Loading...</td>
             </tr>
             <tr v-else-if="!products.length">
-              <td colspan="7" class="state-cell">No products found</td>
+              <td colspan="8" class="state-cell">No products found</td>
             </tr>
             <template v-else>
               <tr
@@ -525,38 +539,42 @@ onMounted(fetchProducts);
           <div v-if="viewLoading" class="state-cell">Loading...</div>
 
           <div v-else-if="viewProduct" class="view-details">
-            <div class="view-row">
-              <span class="view-label">Product Code</span>
-              <span class="view-value">{{ viewProduct.product_code }}</span>
+            <div class="view-header">
+              <img
+                v-if="viewProduct.image"
+                :src="getImageUrl(viewProduct.image)"
+                :alt="viewProduct.name"
+                class="view-image"
+                @click="openImagePreview(viewProduct.image)"
+              />
+              <div v-else class="view-image view-image-placeholder">No Image</div>
+
+              <div class="view-header-info">
+                <span class="view-header-name">{{ viewProduct.name }}</span>
+                <span class="view-header-code">{{ viewProduct.product_code }}</span>
+                <span :class="['status-badge', viewProduct.status?.toLowerCase()]">
+                  {{ viewProduct.status }}
+                </span>
+              </div>
             </div>
 
-            <div class="view-row">
-              <span class="view-label">Name</span>
-              <span class="view-value">{{ viewProduct.name }}</span>
-            </div>
+            <div class="view-grid">
+              <div class="view-row">
+                <span class="view-label">Base Price</span>
+                <span class="view-value">{{
+                  Number(viewProduct.base_price).toFixed(2)
+                }}</span>
+              </div>
 
-            <div class="view-row">
-              <span class="view-label">Base Price</span>
-              <span class="view-value">{{
-                Number(viewProduct.base_price).toFixed(2)
-              }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Unit</span>
-              <span class="view-value">{{ viewProduct.unit }}</span>
+              <div class="view-row">
+                <span class="view-label">Unit</span>
+                <span class="view-value">{{ viewProduct.unit }}</span>
+              </div>
             </div>
 
             <div class="view-row">
               <span class="view-label">Description</span>
               <span class="view-value">{{ viewProduct.description || "-" }}</span>
-            </div>
-
-            <div class="view-row">
-              <span class="view-label">Status</span>
-              <span :class="['status-badge', viewProduct.status?.toLowerCase()]">
-                {{ viewProduct.status }}
-              </span>
             </div>
           </div>
         </div>
@@ -856,6 +874,11 @@ onMounted(fetchProducts);
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -863,6 +886,11 @@ onMounted(fetchProducts);
     color: #2b2e24;
     padding: 12px 16px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {
@@ -945,7 +973,7 @@ onMounted(fetchProducts);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1100;
   padding: 24px;
 }
 
@@ -1198,6 +1226,70 @@ onMounted(fetchProducts);
 .view-value {
   font-size: 14px;
   color: #2b2e24;
+}
+
+.view-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #f0efe4;
+}
+
+.view-image {
+  flex-shrink: 0;
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #e7e4d6;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.view-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f7f0;
+  color: #a7ab9b;
+  font-size: 11px;
+  text-align: center;
+  cursor: default;
+
+  &:hover {
+    transform: none;
+  }
+}
+
+.view-header-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.view-header-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #2b2e24;
+}
+
+.view-header-code {
+  font-size: 13px;
+  color: #6b7461;
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
 }
 
 .form-image-preview {

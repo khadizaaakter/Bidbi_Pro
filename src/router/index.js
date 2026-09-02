@@ -5,6 +5,7 @@ import Home from "@/views/Home.vue";
 import Product_list from "@/views/Products/product_list.vue";
 import Bidder_list from "@/views/Bidders/bidder_list.vue";
 import Tender_list from "@/views/Tenders/tender_list.vue";
+import Bidder_approval from "@/views/BidderApproval/bidder_approval.vue";
 import User_manager from "@/views/user manager/user_manager.vue";
 import Role from "@/views/user manager/role.vue";
 import Permission from "@/views/user manager/permission.vue";
@@ -41,6 +42,12 @@ const routes = [
     name: "tender",
     component: Tender_list,
     meta: { permission: "Tender" },
+  },
+  {
+    path: "/bidder_approval",
+    name: "bidder_approval",
+    component: Bidder_approval,
+    meta: { permission: "Bidder Approval" },
   },
   {
     path: "/user_manager",

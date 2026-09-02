@@ -13,6 +13,7 @@ import {
   UserSwitchOutlined,
   IdcardOutlined,
   SafetyOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons-vue";
 
 import { useLoginStore } from "@/stores/login";
@@ -70,6 +71,16 @@ watch(
       <router-link :to="{ name: 'tender' }">
         <file-done-outlined />
         <span>Tender</span>
+      </router-link>
+    </a-menu-item>
+    <a-menu-item
+      v-if="canView('Bidder Approval')"
+      key="bidder_approval"
+      title="Bidder Approval"
+    >
+      <router-link :to="{ name: 'bidder_approval' }">
+        <check-circle-outlined />
+        <span>Bidder Approval</span>
       </router-link>
     </a-menu-item>
     <a-menu-item v-if="canView('Invoice')" key="invoice" title="Invoice">

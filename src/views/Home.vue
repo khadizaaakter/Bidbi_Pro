@@ -54,7 +54,7 @@ const fetchTenderOverview = async () => {
     const [listResponse, activeResponse] = await Promise.all([
       axios.get(`${apiBase}/admin/tenders`, {
         ...loginStore.getTokenConfig,
-        params: { page: 1, per_page: 5 },
+        params: { page: 1, per_page: 10 },
       }),
       axios.get(`${apiBase}/admin/tenders`, {
         ...loginStore.getTokenConfig,
@@ -413,6 +413,11 @@ onMounted(() => {
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -420,6 +425,11 @@ onMounted(() => {
     color: #2b2e24;
     padding: 12px 16px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {
@@ -441,14 +451,21 @@ onMounted(() => {
   font-weight: 700;
   text-transform: capitalize;
 
-  &.active {
+  &.active,
+  &.open {
     background: #e7f3ea;
     color: #285239;
   }
 
-  &.inactive {
+  &.inactive,
+  &.closed {
     background: #fbeceb;
     color: #b3261e;
+  }
+
+  &.awarded {
+    background: #eaf1fb;
+    color: #1d4ed8;
   }
 }
 

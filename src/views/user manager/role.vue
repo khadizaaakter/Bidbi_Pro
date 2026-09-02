@@ -692,6 +692,11 @@ onMounted(() => {
     text-align: left;
     padding: 12px 16px;
     border-bottom: 1px solid #e7e4d6;
+    border-right: 1px solid #e7e4d6;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   td {
@@ -699,6 +704,11 @@ onMounted(() => {
     color: #2b2e24;
     padding: 12px 16px;
     border-bottom: 1px solid #f0efe4;
+    border-right: 1px solid #f0efe4;
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   tbody tr:hover td {
