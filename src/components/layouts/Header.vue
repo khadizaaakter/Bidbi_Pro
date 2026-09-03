@@ -52,18 +52,20 @@ const handleLogout = async () => {
 <template>
   <header class="app-header">
     <div class="header-inner">
-      <RouterLink :to="{ name: 'home' }" class="brand">
+      <div class="header-left">
+        <button
+          class="menu-toggle"
+          type="button"
+          aria-label="Open menu"
+          @click="$emit('toggle-menu')"
+        >
+          <i class="bx bx-menu"></i>
+        </button>
 
-      </RouterLink>
+        <RouterLink :to="{ name: 'home' }" class="brand">
 
-      <button
-        class="menu-toggle"
-        type="button"
-        aria-label="Open menu"
-        @click="$emit('toggle-menu')"
-      >
-        <i class="bx bx-menu"></i>
-      </button>
+        </RouterLink>
+      </div>
 
       <div class="header-actions">
         <!-- <button class="icon-btn" type="button" aria-label="Notifications">
@@ -110,6 +112,12 @@ const handleLogout = async () => {
   padding: 0 24px;
   max-width: 1440px;
   margin: 0 auto;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .menu-toggle {

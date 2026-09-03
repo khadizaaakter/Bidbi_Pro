@@ -9,6 +9,7 @@ import {
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
+import AppSelect from "@/components/AppSelect.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase } from "@/utilities/config";
 import {
@@ -83,6 +84,13 @@ const pageSize = 20;
 const currentPage = ref(1);
 const searchQuery = ref("");
 const roleFilter = ref("");
+
+const getRoleFilterOptions = () => [
+  { label: "All Roles", value: "" },
+  ...roleOptions.value.map((role) => ({ label: role, value: role })),
+];
+
+const getRoleFormOptions = () => roleOptions.value.map((role) => ({ label: role, value: role }));
 
 const getRoleNames = (user) =>
   user.roles?.length ? user.roles.map((role) => role.name).join(", ") : "-";
@@ -442,16 +450,13 @@ onMounted(() => {
             @input="onSearchInput"
           />
 
-          <select
+          <AppSelect
             v-model="roleFilter"
             class="role-select"
+            placeholder="All Roles"
+            :options="getRoleFilterOptions()"
             @change="onRoleFilterChange"
-          >
-            <option value="">All Roles</option>
-            <option v-for="role in roleOptions" :key="role" :value="role">
-              {{ role }}
-            </option>
-          </select>
+          />
 
           <button type="button" class="create-btn" @click="openCreateModal">
             + Create User
@@ -654,12 +659,12 @@ onMounted(() => {
 
             <div class="form-row">
               <label>Role</label>
-              <select v-model="createForm.roles" class="role-select-input" required>
-                <option value="" disabled>Select role</option>
-                <option v-for="role in roleOptions" :key="role" :value="role">
-                  {{ role }}
-                </option>
-              </select>
+              <AppSelect
+                v-model="createForm.roles"
+                class="role-select-input"
+                placeholder="Select role"
+                :options="getRoleFormOptions()"
+              />
               <span v-if="createErrors.roles" class="field-error">{{
                 createErrors.roles[0]
               }}</span>
@@ -715,12 +720,12 @@ onMounted(() => {
 
             <div class="form-row">
               <label>Role</label>
-              <select v-model="editForm.roles" class="role-select-input" required>
-                <option value="" disabled>Select role</option>
-                <option v-for="role in roleOptions" :key="role" :value="role">
-                  {{ role }}
-                </option>
-              </select>
+              <AppSelect
+                v-model="editForm.roles"
+                class="role-select-input"
+                placeholder="Select role"
+                :options="getRoleFormOptions()"
+              />
               <span v-if="editErrors.roles" class="field-error">{{
                 editErrors.roles[0]
               }}</span>
@@ -881,20 +886,7 @@ onMounted(() => {
 }
 
 .role-select {
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid #e7e4d6;
-  background: #fff;
-  color: #2b2e24;
-  font-size: 13px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-
-  &:focus {
-    border-color: #285239;
-  }
+  width: 160px;
 }
 
 .table-card {
@@ -1148,8 +1140,7 @@ onMounted(() => {
     color: #45493d;
   }
 
-  input,
-  .role-select-input {
+  input {
     height: 38px;
     padding: 0 14px;
     border-radius: 10px;
@@ -1163,10 +1154,6 @@ onMounted(() => {
     &:focus {
       border-color: #285239;
     }
-  }
-
-  .role-select-input {
-    cursor: pointer;
   }
 }
 

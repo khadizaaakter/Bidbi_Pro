@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
+import AppSelect from "@/components/AppSelect.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase, base } from "@/utilities/config";
 import {
@@ -65,6 +66,8 @@ const totalPages = ref(1);
 
 const searchQuery = ref("");
 const statusFilter = ref("");
+const closingDateFrom = ref("");
+const closingDateTo = ref("");
 
 const goToPage = (page) => {
   if (page < 1 || page > totalPages.value) return;
@@ -165,6 +168,8 @@ const fetchTenders = async () => {
         per_page: pageSize,
         search: searchQuery.value || undefined,
         status: statusFilter.value || undefined,
+        closing_date_from: closingDateFrom.value || undefined,
+        closing_date_to: closingDateTo.value || undefined,
       },
     });
 
@@ -184,6 +189,12 @@ const fetchTenders = async () => {
 const onFilterChange = () => {
   currentPage.value = 1;
   fetchTenders();
+};
+
+const clearClosingDateRange = () => {
+  closingDateFrom.value = "";
+  closingDateTo.value = "";
+  onFilterChange();
 };
 
 let searchDebounce = null;
@@ -285,6 +296,7 @@ const emptyForm = () => ({
   ref_code: generateRefCode(),
   product_code: "",
   qty: "",
+  min_price: "",
   closing_date: "",
   notify: true,
 });
@@ -387,6 +399,7 @@ const submitCreate = async () => {
     const data = new URLSearchParams();
     data.append("product_code", createForm.value.product_code);
     data.append("qty", createForm.value.qty);
+    data.append("min_price", createForm.value.min_price);
     data.append("closing_date", toApiDateTime(createForm.value.closing_date));
     data.append("ref_code", createForm.value.ref_code);
     data.append("notify", createForm.value.notify ? "1" : "0");
@@ -429,6 +442,7 @@ const editingTenderId = ref(null);
 const emptyEditForm = () => ({
   ref_code: "",
   qty: "",
+  min_price: "",
   closing_date: "",
   notify: true,
 });
@@ -441,6 +455,7 @@ const openEditModal = (Tender) => {
   editForm.value = {
     ref_code: Tender.ref_code || "",
     qty: Tender.quantity || "",
+    min_price: Tender.min_price || "",
     closing_date: toDatetimeLocal(Tender.closing_date),
     notify: true,
   };
@@ -460,6 +475,7 @@ const submitEdit = async () => {
   try {
     const data = new URLSearchParams();
     data.append("qty", editForm.value.qty);
+    data.append("min_price", editForm.value.min_price);
     data.append("closing_date", toApiDateTime(editForm.value.closing_date));
     data.append("notify", editForm.value.notify ? "1" : "0");
 
@@ -492,6 +508,7 @@ const submitEdit = async () => {
           ...Tenders.value[index],
           ref_code: updatedTender.ref_code,
           quantity: updatedTender.available_quantity,
+          min_price: updatedTender.min_price,
           closing_date: updatedTender.end_date,
           cutoff_label: updatedTender.closing_label,
           status: updatedTender.status,
@@ -581,6 +598,33 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="toolbar-right">
+
+                  <div class="date-range-box">
+            <input
+              v-model="closingDateFrom"
+              type="date"
+              class="date-input"
+              :max="closingDateTo || undefined"
+              @change="onFilterChange"
+            />
+            <span class="date-range-sep">to</span>
+            <input
+              v-model="closingDateTo"
+              type="date"
+              class="date-input"
+              :min="closingDateFrom || undefined"
+              @change="onFilterChange"
+            />
+            <button
+              v-if="closingDateFrom || closingDateTo"
+              type="button"
+              class="date-range-clear"
+              title="Clear closing date filter"
+              @click="clearClosingDateRange"
+            >
+              &times;
+            </button>
+          </div>
           <div class="search-box">
             <SearchOutlined class="search-icon" />
             <input
@@ -592,12 +636,20 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <select v-model="statusFilter" class="status-select" @change="onFilterChange">
-            <option value="">All Status</option>
-            <option value="Open">Open</option>
-            <option value="Closed">Closed</option>
-            <option value="Awarded">Awarded</option>
-          </select>
+          <AppSelect
+            v-model="statusFilter"
+            class="status-select"
+            placeholder="All Status"
+            :options="[
+              { label: 'All Status', value: '' },
+              { label: 'Open', value: 'Open' },
+              { label: 'Closed', value: 'Closed' },
+              { label: 'Awarded', value: 'Awarded' },
+            ]"
+            @change="onFilterChange"
+          />
+
+
 
           <button type="button" class="create-btn" @click="openCreateModal">
             + Create
@@ -618,6 +670,7 @@ onBeforeUnmount(() => {
               <th>Product Code</th>
               <th>Product Name</th>
               <th>Base Price</th>
+              <th>Min Price</th>
               <th>Unit</th>
               <th>Quantity</th>
               <th>Closing Date</th>
@@ -630,10 +683,10 @@ onBeforeUnmount(() => {
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="12" class="state-cell">Loading...</td>
+              <td colspan="13" class="state-cell">Loading...</td>
             </tr>
             <tr v-else-if="!Tenders.length">
-              <td colspan="12" class="state-cell">No tenders found</td>
+              <td colspan="13" class="state-cell">No tenders found</td>
             </tr>
             <template v-else>
               <tr v-for="(tender, index) in Tenders" :key="tender.tender_id">
@@ -642,6 +695,7 @@ onBeforeUnmount(() => {
                 <td>{{ tender.product_code }}</td>
                 <td>{{ tender.product_name }}</td>
                 <td class="text-right">{{ tender.base_price }}</td>
+                <td class="text-right">{{ tender.min_price ?? "-" }}</td>
                 <td>{{ tender.unit || "-" }}</td>
                 <td class="text-right">{{ tender.quantity || "-" }}</td>
                 <td>{{ formatClosingDate(tender.closing_date) }}</td>
@@ -680,7 +734,7 @@ onBeforeUnmount(() => {
                     >
                       <EditOutlined />
                     </button>
-                    <button
+                    <!-- <button
                       type="button"
                       class="action-btn delete-btn"
                       title="Delete"
@@ -688,7 +742,7 @@ onBeforeUnmount(() => {
                       @click="openDeleteModal(tender)"
                     >
                       <DeleteOutlined />
-                    </button>
+                    </button> -->
                   </div>
                 </td>
               </tr>
@@ -767,6 +821,11 @@ onBeforeUnmount(() => {
               <div class="view-row">
                 <span class="view-label">Base Price</span>
                 <span class="view-value">{{ formatPrice(viewTender.product?.base_price) }}</span>
+              </div>
+
+              <div class="view-row">
+                <span class="view-label">Min Price</span>
+                <span class="view-value">{{ formatPrice(viewTender.min_price) }}</span>
               </div>
 
               <div class="view-row">
@@ -945,6 +1004,21 @@ onBeforeUnmount(() => {
               }}</span>
             </div>
 
+            <div class="form-row">
+              <label>Min Price</label>
+              <input
+                v-model="createForm.min_price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter minimum price"
+                required
+              />
+              <span v-if="createErrors.min_price" class="field-error">{{
+                createErrors.min_price[0]
+              }}</span>
+            </div>
+
             <div class="form-row form-row-split">
               <div>
                 <label>Quantity</label>
@@ -1009,6 +1083,20 @@ onBeforeUnmount(() => {
                 readonly
                 class="readonly-input"
               />
+            </div>
+
+            <div class="form-row">
+              <label>Min Price</label>
+              <input
+                v-model="editForm.min_price"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+              />
+              <span v-if="editErrors.min_price" class="field-error">{{
+                editErrors.min_price[0]
+              }}</span>
             </div>
 
             <div class="form-row">
@@ -1112,8 +1200,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.search-input,
-.status-select {
+.search-input {
   height: 38px;
   padding: 0 14px;
   border-radius: 10px;
@@ -1151,7 +1238,53 @@ onBeforeUnmount(() => {
 }
 
 .status-select {
+  width: 160px;
+}
+
+.date-range-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+}
+
+.date-input {
+  height: 36px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #2b2e24;
+  font-size: 13px;
+  width: 130px;
+}
+
+.date-range-sep {
+  font-size: 12px;
+  color: #a7ab9b;
+}
+
+.date-range-clear {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #6b7461;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
+  border-radius: 50%;
+
+  &:hover {
+    background: #f6f7f0;
+    color: #2b2e24;
+  }
 }
 
 .create-btn {
@@ -1807,7 +1940,12 @@ onBeforeUnmount(() => {
   .search-box,
   .search-input,
   .status-select,
+  .date-range-box,
   .create-btn {
+    width: 100%;
+  }
+
+  .date-input {
     width: 100%;
   }
 

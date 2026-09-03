@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import axios from "axios";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
+import AppSelect from "@/components/AppSelect.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase } from "@/utilities/config";
 import {
@@ -21,6 +22,9 @@ const currentPage = ref(1);
 
 const statusFilter = ref("pending");
 const searchQuery = ref("");
+const closingDateFrom = ref("");
+const closingDateTo = ref("");
+const closingDateSort = ref(null); // null | "asc" | "desc"
 
 const normalizeApproval = (row) => ({
   tender_id: row.tender?.tender_id ?? row.tender_id ?? row.id,
@@ -51,7 +55,9 @@ const fetchApprovals = async () => {
     const response = await axios.get(`${apiBase}/admin/bidder-approvals`, {
       ...loginStore.getTokenConfig,
       params: {
-        status: statusFilter.value || undefined,
+        status: statusFilter.value || "all",
+        closing_date_from: closingDateFrom.value || undefined,
+        closing_date_to: closingDateTo.value || undefined,
         page: 1,
         per_page: 100000,
       },
@@ -86,7 +92,28 @@ const matchesSearch = (row) => {
   return words.every((word) => haystack.includes(word));
 };
 
-const filteredApprovals = () => allApprovals.value.filter(matchesSearch);
+const sortApprovals = (rows) => {
+  if (!closingDateSort.value) return rows;
+
+  const dir = closingDateSort.value === "asc" ? 1 : -1;
+
+  return [...rows].sort(
+    (a, b) => (new Date(a.closing_date) - new Date(b.closing_date)) * dir
+  );
+};
+
+const filteredApprovals = () => sortApprovals(allApprovals.value.filter(matchesSearch));
+
+const toggleClosingDateSort = () => {
+  closingDateSort.value = closingDateSort.value === "asc" ? "desc" : "asc";
+  currentPage.value = 1;
+};
+
+const closingDateSortIcon = () => {
+  if (closingDateSort.value === "asc") return "bx-up-arrow-alt";
+  if (closingDateSort.value === "desc") return "bx-down-arrow-alt";
+  return "bx-sort-alt-2";
+};
 
 const totalPages = () => Math.max(1, Math.ceil(filteredApprovals().length / pageSize));
 
@@ -107,6 +134,18 @@ const onFilterChange = () => {
 
 const onSearchInput = () => {
   currentPage.value = 1;
+};
+
+const onClosingDateRangeChange = () => {
+  currentPage.value = 1;
+  fetchApprovals();
+};
+
+const clearClosingDateRange = () => {
+  closingDateFrom.value = "";
+  closingDateTo.value = "";
+  currentPage.value = 1;
+  fetchApprovals();
 };
 
 // top 3 bidders modal
@@ -268,6 +307,35 @@ onMounted(() => {
         </div>
 
         <div class="toolbar-right">
+
+        <div class="date-range">
+            <input
+              v-model="closingDateFrom"
+              type="date"
+              class="date-input"
+              title="Closing date from"
+              :max="closingDateTo || undefined"
+              @change="onClosingDateRangeChange"
+            />
+            <span class="date-range-sep">to</span>
+            <input
+              v-model="closingDateTo"
+              type="date"
+              class="date-input"
+              title="Closing date to"
+              :min="closingDateFrom || undefined"
+              @change="onClosingDateRangeChange"
+            />
+            <button
+              v-if="closingDateFrom || closingDateTo"
+              type="button"
+              class="date-range-clear"
+              title="Clear date range"
+              @click="clearClosingDateRange"
+            >
+              &times;
+            </button>
+          </div>
           <input
             v-model="searchQuery"
             type="text"
@@ -276,11 +344,20 @@ onMounted(() => {
             @input="onSearchInput"
           />
 
-          <select v-model="statusFilter" class="status-select" @change="onFilterChange">
-            <option value="pending">Pending</option>
-            <option value="accepted">Accepted</option>
-            <option value="cancelled">Closed</option>
-          </select>
+          <AppSelect
+            v-model="statusFilter"
+            class="status-select"
+            placeholder="Pending"
+            :options="[
+              { label: 'Pending', value: 'pending' },
+              { label: 'Accepted', value: 'accepted' },
+              { label: 'Closed', value: 'cancelled' },
+              { label: 'All', value: '' },
+            ]"
+            @change="onFilterChange"
+          />
+
+          
         </div>
       </div>
 
@@ -292,7 +369,10 @@ onMounted(() => {
               <th>Reference Code</th>
               <th>Product Code</th>
               <th>Product Name</th>
-              <th>Closing Date</th>
+              <th class="sortable-th" @click="toggleClosingDateSort">
+                Closing Date
+                <i class="bx" :class="closingDateSortIcon()"></i>
+              </th>
               <th>Top Bidder</th>
               <th>Total Bidders</th>
               <th>Status</th>
@@ -308,19 +388,19 @@ onMounted(() => {
             </tr>
             <template v-else>
               <tr v-for="(row, index) in approvals()" :key="row.tender_id">
-                <td>{{ (currentPage - 1) * pageSize + index + 1 }}</td>
-                <td>{{ row.ref_code }}</td>
-                <td>{{ row.product_code }}</td>
-                <td>{{ row.product_name }}</td>
-                <td>{{ row.closing_date }}</td>
-                <td>{{ row.top_bidder_name }}</td>
-                <td>{{ row.total_bidders }}</td>
-                <td>
+                <td data-label="SL">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
+                <td data-label="Reference Code">{{ row.ref_code }}</td>
+                <td data-label="Product Code">{{ row.product_code }}</td>
+                <td data-label="Product Name">{{ row.product_name }}</td>
+                <td data-label="Closing Date">{{ row.closing_date }}</td>
+                <td data-label="Top Bidder">{{ row.top_bidder_name }}</td>
+                <td data-label="Total Bidders">{{ row.total_bidders }}</td>
+                <td data-label="Status">
                   <span :class="['status-badge', statusClass(row)]">
                     {{ statusLabel(row) }}
                   </span>
                 </td>
-                <td>
+                <td data-label="Top 3 Bidders">
                   <button
                     type="button"
                     class="details-btn"
@@ -366,59 +446,61 @@ onMounted(() => {
             </button>
           </div>
 
-          <div v-if="biddersLoading" class="state-cell">Loading...</div>
+          <div class="modal-body">
+            <div v-if="biddersLoading" class="state-cell">Loading...</div>
 
-          <template v-else>
-            <div class="bidders-tender-info">
-              <div class="view-row">
-                <span class="view-label">Reference Code</span>
-                <span class="view-value">{{ biddersTender?.ref_code || "-" }}</span>
+            <template v-else>
+              <div class="bidders-tender-info">
+                <div class="view-row">
+                  <span class="view-label">Reference Code</span>
+                  <span class="view-value">{{ biddersTender?.ref_code || "-" }}</span>
+                </div>
+
+                <div class="view-row">
+                  <span class="view-label">Product</span>
+                  <span class="view-value">{{ biddersTender?.product_name || "-" }}</span>
+                </div>
+
+                <div class="view-row">
+                  <span class="view-label">Closing Date</span>
+                  <span class="view-value">{{ biddersTender?.closing_date || "-" }}</span>
+                </div>
+
+                <div class="view-row">
+                  <span class="view-label">Status</span>
+                  <span class="view-value">{{ biddersTender?.status || "-" }}</span>
+                </div>
               </div>
 
-              <div class="view-row">
-                <span class="view-label">Product</span>
-                <span class="view-value">{{ biddersTender?.product_name || "-" }}</span>
-              </div>
+              <div v-if="!bidders.length" class="state-cell">No bidders for this tender</div>
 
-              <div class="view-row">
-                <span class="view-label">Closing Date</span>
-                <span class="view-value">{{ biddersTender?.closing_date || "-" }}</span>
-              </div>
+              <div v-else class="bidder-cards">
+                <div
+                  v-for="bidder in bidders"
+                  :key="bidder.bid_id"
+                  class="bidder-card"
+                  :class="{ 'is-winner': bidder.is_winner }"
+                >
+                  <div class="bidder-card-info">
+                    <span class="bidder-role" :class="bidder.role">
+                      {{ bidderRoleLabel(bidder) }}
+                    </span>
 
-              <div class="view-row">
-                <span class="view-label">Status</span>
-                <span class="view-value">{{ biddersTender?.status || "-" }}</span>
-              </div>
-            </div>
+                    <div class="bidder-name-row">
+                      <strong>{{ bidder.customer_name || bidder.customer_code }}</strong>
+                      <span v-if="bidder.is_winner" class="winner-tag">Winner</span>
+                    </div>
 
-            <div v-if="!bidders.length" class="state-cell">No bidders for this tender</div>
-
-            <div v-else class="bidder-cards">
-              <div
-                v-for="bidder in bidders"
-                :key="bidder.bid_id"
-                class="bidder-card"
-                :class="{ 'is-winner': bidder.is_winner }"
-              >
-                <div class="bidder-card-info">
-                  <span class="bidder-role" :class="bidder.role">
-                    {{ bidderRoleLabel(bidder) }}
-                  </span>
-
-                  <div class="bidder-name-row">
-                    <strong>{{ bidder.customer_name || bidder.customer_code }}</strong>
-                    <span v-if="bidder.is_winner" class="winner-tag">Winner</span>
-                  </div>
-
-                  <div class="bidder-meta">
-                    <span><span class="meta-label">Bidder ID:</span> {{ bidder.customer_code }}</span>
-                    <span v-if="bidder.phone"><span class="meta-label">Phone:</span> {{ bidder.phone }}</span>
-                    <span class="bidder-amount"><span class="meta-label">Amount:</span> {{ bidder.amount }}</span>
+                    <div class="bidder-meta">
+                      <span><span class="meta-label">Bidder ID:</span> {{ bidder.customer_code }}</span>
+                      <span v-if="bidder.phone"><span class="meta-label">Phone:</span> {{ bidder.phone }}</span>
+                      <span class="bidder-amount"><span class="meta-label">Amount:</span> {{ bidder.amount }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </template>
+            </template>
+          </div>
 
           <div class="form-actions">
             <button type="button" class="cancel-btn" @click="closeBiddersModal">
@@ -538,9 +620,9 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.search-input,
-.status-select {
+.search-input {
   height: 38px;
+  width: 240px;
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid #e7e4d6;
@@ -555,12 +637,55 @@ onMounted(() => {
   }
 }
 
-.search-input {
-  width: 240px;
+.status-select {
+  width: 160px;
 }
 
-.status-select {
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-input {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #2b2e24;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    border-color: #285239;
+  }
+}
+
+.date-range-sep {
+  font-size: 12px;
+  color: #6b7461;
+}
+
+.date-range-clear {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #6b7461;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
+  border-radius: 50%;
+
+  &:hover {
+    background: #f6f7f0;
+    color: #2b2e24;
+  }
 }
 
 .table-card {
@@ -591,6 +716,20 @@ onMounted(() => {
 
     &:last-child {
       border-right: none;
+    }
+  }
+
+  .sortable-th {
+    cursor: pointer;
+    user-select: none;
+
+    i {
+      font-size: 14px;
+      vertical-align: -2px;
+    }
+
+    &:hover {
+      color: #285239;
     }
   }
 
@@ -711,6 +850,7 @@ onMounted(() => {
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   background: #fff;
   border-radius: 16px;
@@ -722,6 +862,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
   margin-bottom: 20px;
 
   h2 {
@@ -751,6 +892,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
   gap: 12px;
   margin-top: 16px;
 }
@@ -777,6 +919,20 @@ onMounted(() => {
 
 .bidders-modal-content {
   max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+
+  .form-actions {
+    padding-top: 14px;
+    border-top: 1px solid #e7e4d6;
+  }
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .bidders-tender-info {
@@ -935,7 +1091,15 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .approval-page {
+    gap: 14px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
   .toolbar-right {
     width: 100%;
   }
@@ -945,8 +1109,121 @@ onMounted(() => {
     width: 100%;
   }
 
+  .date-range {
+    width: 100%;
+  }
+
+  .date-input {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .table-card {
+    padding: 0;
+    border-radius: 12px;
+    overflow-x: visible;
+  }
+
+  .approvals-table {
+    min-width: 0;
+    width: 100%;
+
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    tbody,
+    tr,
+    td {
+      display: block;
+      width: 100%;
+    }
+
+    tr {
+      padding: 14px;
+      border-bottom: 8px solid #f6f7f0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      text-align: right;
+      padding: 8px 4px;
+      border: none;
+
+      &::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: #6b7461;
+        text-align: left;
+        margin-right: 12px;
+      }
+    }
+
+    tbody tr:hover td {
+      background: transparent;
+    }
+
+    .state-cell {
+      display: block;
+      text-align: center;
+
+      &::before {
+        content: none;
+      }
+    }
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+  }
+
+  .form-modal-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
   .form-modal-content {
     padding: 16px;
+    max-height: 85vh;
+    max-height: 85dvh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .bidders-tender-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bidder-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bidder-meta {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .form-actions {
+    flex-wrap: wrap;
+
+    button {
+      flex: 1 1 auto;
+    }
   }
 }
 </style>

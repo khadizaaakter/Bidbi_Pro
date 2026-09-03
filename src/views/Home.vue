@@ -237,11 +237,11 @@ onMounted(() => {
             </tr>
             <template v-else>
               <tr v-for="tender in recentTenders" :key="tender.tender_id">
-                <td>{{ tender.ref_code }}</td>
-                <td>{{ tender.product_name }}</td>
-                <td class="text-right">{{ tender.quantity || "-" }}</td>
-                <td>{{ tender.closing_date || "-" }}</td>
-                <td>
+                <td data-label="Reference Code">{{ tender.ref_code }}</td>
+                <td data-label="Product">{{ tender.product_name }}</td>
+                <td data-label="Quantity" class="text-right">{{ tender.quantity || "-" }}</td>
+                <td data-label="Closing Date">{{ tender.closing_date || "-" }}</td>
+                <td data-label="Status">
                   <span :class="['status-badge', tender.status?.toLowerCase()]">
                     {{ tender.status }}
                   </span>
@@ -478,6 +478,108 @@ onMounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+  }
+
+  .dashboard-page {
+    gap: 14px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .table-card {
+    padding: 0;
+    border-radius: 14px;
+    overflow-x: visible;
+  }
+
+  .table-card-header {
+    padding: 14px 14px 10px;
+  }
+
+  .recent-table {
+    min-width: 0;
+
+    thead {
+      display: none;
+    }
+
+    tbody,
+    tr,
+    td {
+      display: block;
+      width: 100%;
+    }
+
+    tr {
+      padding: 12px 14px;
+      border-bottom: 1px solid #f0efe4;
+    }
+
+    tr:last-child {
+      border-bottom: none;
+    }
+
+    td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+      border: none;
+      text-align: right;
+    }
+
+    td::before {
+      content: attr(data-label);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: #6b7461;
+      text-align: left;
+    }
+
+    .state-cell {
+      display: block;
+      text-align: center;
+      padding: 24px 14px;
+    }
+
+    .state-cell::before {
+      content: none;
+    }
+  }
+}
+
+@media (max-width: 380px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

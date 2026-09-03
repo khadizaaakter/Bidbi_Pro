@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons-vue";
 
 import MainLayout from "@/components/layouts/main_layout.vue";
+import AppSelect from "@/components/AppSelect.vue";
 import { useLoginStore } from "@/stores/login";
 import { apiBase, base } from "@/utilities/config";
 import {
@@ -387,17 +388,29 @@ onMounted(fetchProducts);
             @input="onSearchInput"
           />
 
-          <select v-model="statusFilter" class="status-select" @change="fetchProducts">
-            <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+          <AppSelect
+            v-model="statusFilter"
+            class="status-select"
+            placeholder="All Status"
+            :options="[
+              { label: 'All Status', value: '' },
+              { label: 'Active', value: 'Active' },
+              { label: 'Inactive', value: 'Inactive' },
+            ]"
+            @change="fetchProducts"
+          />
 
-          <select v-model="unitFilter" class="status-select" @change="fetchProducts">
-            <option value="">All Units</option>
-            <option value="Bag">Bag</option>
-            <option value="kg">KG</option>
-          </select>
+          <AppSelect
+            v-model="unitFilter"
+            class="status-select"
+            placeholder="All Units"
+            :options="[
+              { label: 'All Units', value: '' },
+              { label: 'Bag', value: 'Bag' },
+              { label: 'KG', value: 'kg' },
+            ]"
+            @change="fetchProducts"
+          />
 
           <!-- <button type="button" class="create-btn" @click="openCreateModal">+ Create</button> -->
           <button
@@ -645,10 +658,13 @@ onMounted(fetchProducts);
 
             <div class="form-row">
               <label>Status</label>
-              <select v-model="createForm.status">
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+              <AppSelect
+                v-model="createForm.status"
+                :options="[
+                  { label: 'Active', value: 'Active' },
+                  { label: 'Inactive', value: 'Inactive' },
+                ]"
+              />
             </div>
 
             <div class="form-row">
@@ -718,10 +734,13 @@ onMounted(fetchProducts);
 
             <div class="form-row">
               <label>Status</label>
-              <select v-model="editForm.status">
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
+              <AppSelect
+                v-model="editForm.status"
+                :options="[
+                  { label: 'Active', value: 'Active' },
+                  { label: 'Inactive', value: 'Inactive' },
+                ]"
+              />
             </div>
 
             <div class="form-row">
@@ -792,9 +811,9 @@ onMounted(fetchProducts);
   flex-wrap: wrap;
 }
 
-.search-input,
-.status-select {
+.search-input {
   height: 38px;
+  width: 240px;
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid #e7e4d6;
@@ -809,12 +828,8 @@ onMounted(fetchProducts);
   }
 }
 
-.search-input {
-  width: 240px;
-}
-
 .status-select {
-  cursor: pointer;
+  width: 160px;
 }
 
 .create-btn {
