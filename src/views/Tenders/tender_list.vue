@@ -127,18 +127,19 @@ const closeBidderModal = () => {
 };
 
 // open Show Modal
-const openViewModal = async (tender_id) => {
+const openViewModal = async (tender) => {
   showViewModal.value = true;
   viewLoading.value = true;
   viewTender.value = null;
 
   try {
     const response = await axios.get(
-      `${apiBase}/admin/tenders/${tender_id}`,
+      `${apiBase}/admin/tenders/${tender.tender_id}`,
       loginStore.getTokenConfig
     );
 
-    viewTender.value = response.data.tender || response.data.data || response.data;
+    const fetchedTender = response.data.tender || response.data.data || response.data;
+    viewTender.value = { ...tender, ...fetchedTender };
   } catch (error) {
     const message = extractErrorMessage(
       error.response?.data,
@@ -192,6 +193,14 @@ const onFilterChange = () => {
 };
 
 const clearClosingDateRange = () => {
+  closingDateFrom.value = "";
+  closingDateTo.value = "";
+  onFilterChange();
+};
+
+const resetFilters = () => {
+  searchQuery.value = "";
+  statusFilter.value = "";
   closingDateFrom.value = "";
   closingDateTo.value = "";
   onFilterChange();
@@ -599,22 +608,26 @@ onBeforeUnmount(() => {
 
         <div class="toolbar-right">
 
-                  <div class="date-range-box">
-            <input
-              v-model="closingDateFrom"
-              type="date"
-              class="date-input"
-              :max="closingDateTo || undefined"
-              @change="onFilterChange"
-            />
+                  <div class="date-range-filter">
+            <div class="date-input-box">
+              <input
+                v-model="closingDateFrom"
+                type="date"
+                class="date-input"
+                :max="closingDateTo || undefined"
+                @change="onFilterChange"
+              />
+            </div>
             <span class="date-range-sep">to</span>
-            <input
-              v-model="closingDateTo"
-              type="date"
-              class="date-input"
-              :min="closingDateFrom || undefined"
-              @change="onFilterChange"
-            />
+            <div class="date-input-box">
+              <input
+                v-model="closingDateTo"
+                type="date"
+                class="date-input"
+                :min="closingDateFrom || undefined"
+                @change="onFilterChange"
+              />
+            </div>
             <button
               v-if="closingDateFrom || closingDateTo"
               type="button"
@@ -649,6 +662,9 @@ onBeforeUnmount(() => {
             @change="onFilterChange"
           />
 
+          <button type="button" class="reset-btn" @click="resetFilters">
+            Reset
+          </button>
 
 
           <button type="button" class="create-btn" @click="openCreateModal">
@@ -722,7 +738,7 @@ onBeforeUnmount(() => {
                       type="button"
                       class="action-btn view-btn"
                       title="Show"
-                      @click="openViewModal(tender.tender_id)"
+                      @click="openViewModal(tender)"
                     >
                       <EyeOutlined />
                     </button>
@@ -1241,10 +1257,15 @@ onBeforeUnmount(() => {
   width: 160px;
 }
 
-.date-range-box {
+.date-range-filter {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.date-input-box {
+  display: flex;
+  align-items: center;
   height: 38px;
   padding: 0 10px;
   border-radius: 10px;
@@ -1280,6 +1301,23 @@ onBeforeUnmount(() => {
   line-height: 1;
   cursor: pointer;
   border-radius: 50%;
+
+  &:hover {
+    background: #f6f7f0;
+    color: #2b2e24;
+  }
+}
+
+.reset-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #6b7461;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 
   &:hover {
     background: #f6f7f0;
@@ -1940,7 +1978,8 @@ onBeforeUnmount(() => {
   .search-box,
   .search-input,
   .status-select,
-  .date-range-box,
+  .date-range-filter,
+  .reset-btn,
   .create-btn {
     width: 100%;
   }

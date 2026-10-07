@@ -36,8 +36,11 @@ const normalizeApproval = (row) => ({
   winner_id: row.tender?.winner_id ?? row.winner_id ?? null,
   active: row.tender?.active ?? row.active,
   total_bidders: row.total_bidders ?? 0,
-  top_bidder_name:
-    row.top_bidder?.customer_name ?? row.top_bidder?.customer_code ?? "-",
+  top_bidder_name: row.top_bidder?.customer_name ?? row.top_bidder?.customer_code ?? "-",
+  top_bidder_rate: row.top_bidder?.amount ?? "-",
+  top_bidder_code: row.top_bidder?.customer_code ?? "-",
+  quantity: row.tender?.qty ?? "-",
+  // bidder_address: row.bidders?.address ?? "-",
 });
 
 const statusLabel = (row) => {
@@ -63,7 +66,8 @@ const fetchApprovals = async () => {
       },
     });
 
-    const rows = response.data.tenders || response.data.data || response.data.bidder_approvals || [];
+    const rows =
+      response.data.tenders || response.data.data || response.data.bidder_approvals || [];
     allApprovals.value = rows.map(normalizeApproval);
   } catch (error) {
     const message = extractErrorMessage(
@@ -148,6 +152,16 @@ const clearClosingDateRange = () => {
   fetchApprovals();
 };
 
+const resetFilters = () => {
+  statusFilter.value = "pending";
+  searchQuery.value = "";
+  closingDateFrom.value = "";
+  closingDateTo.value = "";
+  closingDateSort.value = null;
+  currentPage.value = 1;
+  fetchApprovals();
+};
+
 // top 3 bidders modal
 const bidderPositionLabels = ["Highest Bid", "Second Highest", "Third Highest"];
 
@@ -175,7 +189,10 @@ const openBiddersModal = async (row) => {
 
     biddersTender.value = response?.data?.tender || row;
     bidders.value = response?.data?.bidders || [];
-    biddersActions.value = response?.data?.actions || { can_accept: false, can_cancel: false };
+    biddersActions.value = response?.data?.actions || {
+      can_accept: false,
+      can_cancel: false,
+    };
   } catch (error) {
     const message = extractErrorMessage(
       error.response?.data,
@@ -197,7 +214,8 @@ const closeBiddersModal = () => {
 
 // the backend always declares the highest (1st position) bid the winner -
 // 2nd/3rd are backups only and are never accepted
-const primaryBidder = () => bidders.value.find((bidder) => bidder.role === "primary") ?? null;
+const primaryBidder = () =>
+  bidders.value.find((bidder) => bidder.role === "primary") ?? null;
 
 const canAccept = () => biddersActions.value.can_accept && !!primaryBidder();
 
@@ -205,15 +223,18 @@ const canAccept = () => biddersActions.value.can_accept && !!primaryBidder();
 const showAcceptModal = ref(false);
 const actionLoading = ref(false);
 const selectedBidder = ref(null);
+const acceptRemarks = ref("");
 
 const openAcceptModal = () => {
   selectedBidder.value = primaryBidder();
+  acceptRemarks.value = "";
   showAcceptModal.value = true;
 };
 
 const closeAcceptModal = () => {
   showAcceptModal.value = false;
   selectedBidder.value = null;
+  acceptRemarks.value = "";
 };
 
 const confirmAccept = async () => {
@@ -224,7 +245,10 @@ const confirmAccept = async () => {
   try {
     const response = await axios.post(
       `${apiBase}/admin/bidder-approvals/${biddersTender.value.tender_id}/accept`,
-      { customer_code: selectedBidder.value.customer_code },
+      {
+        customer_code: selectedBidder.value.customer_code,
+        remarks: acceptRemarks.value.trim(),
+      },
       loginStore.getTokenConfig
     );
 
@@ -234,15 +258,15 @@ const confirmAccept = async () => {
       return;
     }
 
-    showNotification("success", response?.data?.message || "Bidder accepted successfully");
+    showNotification(
+      "success",
+      response?.data?.message || "Bidder accepted successfully"
+    );
     closeAcceptModal();
     closeBiddersModal();
     await fetchApprovals();
   } catch (error) {
-    const message = extractErrorMessage(
-      error.response?.data,
-      "Failed to accept bidder"
-    );
+    const message = extractErrorMessage(error.response?.data, "Failed to accept bidder");
     showNotification("error", message);
   } finally {
     actionLoading.value = false;
@@ -283,10 +307,7 @@ const confirmCancel = async () => {
     closeBiddersModal();
     await fetchApprovals();
   } catch (error) {
-    const message = extractErrorMessage(
-      error.response?.data,
-      "Failed to cancel bidder"
-    );
+    const message = extractErrorMessage(error.response?.data, "Failed to cancel bidder");
     showNotification("error", message);
   } finally {
     actionLoading.value = false;
@@ -307,8 +328,7 @@ onMounted(() => {
         </div>
 
         <div class="toolbar-right">
-
-        <div class="date-range">
+          <div class="date-range">
             <input
               v-model="closingDateFrom"
               type="date"
@@ -357,7 +377,7 @@ onMounted(() => {
             @change="onFilterChange"
           />
 
-          
+          <button type="button" class="reset-btn" @click="resetFilters">Reset</button>
         </div>
       </div>
 
@@ -369,11 +389,14 @@ onMounted(() => {
               <th>Reference Code</th>
               <th>Product Code</th>
               <th>Product Name</th>
+              <th>Quantity</th>
               <th class="sortable-th" @click="toggleClosingDateSort">
                 Closing Date
                 <i class="bx" :class="closingDateSortIcon()"></i>
               </th>
               <th>Top Bidder</th>
+              <th>Top Bidder Code</th>
+              <th>Top Bidder Rate</th>
               <th>Total Bidders</th>
               <th>Status</th>
               <th>Top 3 Bidders</th>
@@ -381,10 +404,10 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="9" class="state-cell">Loading...</td>
+              <td colspan="12" class="state-cell">Loading...</td>
             </tr>
             <tr v-else-if="!approvals().length">
-              <td colspan="9" class="state-cell">No bidder approvals found</td>
+              <td colspan="12" class="state-cell">No bidder approvals found</td>
             </tr>
             <template v-else>
               <tr v-for="(row, index) in approvals()" :key="row.tender_id">
@@ -392,9 +415,14 @@ onMounted(() => {
                 <td data-label="Reference Code">{{ row.ref_code }}</td>
                 <td data-label="Product Code">{{ row.product_code }}</td>
                 <td data-label="Product Name">{{ row.product_name }}</td>
+                <td data-label="Quantity" class="text-right">{{ row.quantity }}</td>
                 <td data-label="Closing Date">{{ row.closing_date }}</td>
                 <td data-label="Top Bidder">{{ row.top_bidder_name }}</td>
-                <td data-label="Total Bidders">{{ row.total_bidders }}</td>
+                <td data-label="Top Bidder Code">{{ row.top_bidder_code }}</td>
+                <td data-label="Top Bidder Rate" class="text-right">{{ row.top_bidder_rate }}</td>
+                <td data-label="Total Bidders" class="text-right">
+                  {{ row.total_bidders }}
+                </td>
                 <td data-label="Status">
                   <span :class="['status-badge', statusClass(row)]">
                     {{ statusLabel(row) }}
@@ -460,6 +488,10 @@ onMounted(() => {
                   <span class="view-label">Product</span>
                   <span class="view-value">{{ biddersTender?.product_name || "-" }}</span>
                 </div>
+                <div class="view-row">
+                  <span class="view-label">Product Qty</span>
+                  <span class="view-value">{{ biddersTender?.qty || "-" }}</span>
+                </div>
 
                 <div class="view-row">
                   <span class="view-label">Closing Date</span>
@@ -472,7 +504,9 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div v-if="!bidders.length" class="state-cell">No bidders for this tender</div>
+              <div v-if="!bidders.length" class="state-cell">
+                No bidders for this tender
+              </div>
 
               <div v-else class="bidder-cards">
                 <div
@@ -486,15 +520,35 @@ onMounted(() => {
                       {{ bidderRoleLabel(bidder) }}
                     </span>
 
-                    <div class="bidder-name-row">
+                    <div
+                      class="bidder-name-row"
+                      style="display: flex; align-items: center; gap: 15px"
+                    >
                       <strong>{{ bidder.customer_name || bidder.customer_code }}</strong>
-                      <span v-if="bidder.is_winner" class="winner-tag">Winner</span>
-                    </div>
 
+                      <span v-if="bidder.is_winner" class="winner-tag">Winner</span>
+
+                      <div class="modal-header-right" style="margin-left: auto">
+                        <span class="modal-time">
+                          {{ bidders?.bid_time || "-" }}
+                        </span>
+                      </div>
+                    </div>
                     <div class="bidder-meta">
-                      <span><span class="meta-label">Bidder ID:</span> {{ bidder.customer_code }}</span>
-                      <span v-if="bidder.phone"><span class="meta-label">Phone:</span> {{ bidder.phone }}</span>
-                      <span class="bidder-amount"><span class="meta-label">Amount:</span> {{ bidder.amount }}</span>
+                      <span
+                        ><span class="meta-label">Bidder ID:</span>
+                        {{ bidder.customer_code }}</span
+                      >
+                      <span>
+                        <span class="meta-label">Address:</span>
+                        {{ bidder.address || "-" }}
+                      </span>
+                      <span v-if="bidder.phone"
+                        ><span class="meta-label">Phone:</span> {{ bidder.phone }}</span
+                      >
+                      <span class="bidder-amount"
+                        ><span class="meta-label">Amount:</span> {{ bidder.amount }}</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -522,7 +576,6 @@ onMounted(() => {
             >
               Cancel
             </button>
-            
           </div>
         </div>
       </div>
@@ -538,9 +591,22 @@ onMounted(() => {
 
           <p class="delete-confirm-text">
             Accept
-            <strong>{{ selectedBidder?.customer_name || selectedBidder?.customer_code }}</strong>
+            <strong>{{
+              selectedBidder?.customer_name || selectedBidder?.customer_code
+            }}</strong>
             as the winning bidder for this tender?
           </p>
+
+          <div class="remarks-field">
+            <label for="accept-remarks" class="view-label">Remarks</label>
+            <textarea
+              id="accept-remarks"
+              v-model="acceptRemarks"
+              class="remarks-input"
+              rows="4"
+              placeholder="Write your remarks here..."
+            ></textarea>
+          </div>
 
           <div class="form-actions">
             <button type="button" class="cancel-btn" @click="closeAcceptModal">
@@ -688,6 +754,23 @@ onMounted(() => {
   }
 }
 
+.reset-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #6b7461;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: #f6f7f0;
+    color: #2b2e24;
+  }
+}
+
 .table-card {
   background: #fff;
   border: 1px solid #e7e4d6;
@@ -802,6 +885,8 @@ onMounted(() => {
   color: #285239;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
 
@@ -1047,6 +1132,31 @@ onMounted(() => {
   margin: 0;
 }
 
+.remarks-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.remarks-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #e7e4d6;
+  background: #fff;
+  color: #2b2e24;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    border-color: #285239;
+  }
+}
+
 .delete-confirm-btn {
   height: 38px;
   padding: 0 18px;
@@ -1105,7 +1215,8 @@ onMounted(() => {
   }
 
   .search-input,
-  .status-select {
+  .status-select,
+  .reset-btn {
     width: 100%;
   }
 
