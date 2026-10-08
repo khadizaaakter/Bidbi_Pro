@@ -40,6 +40,7 @@ const normalizeApproval = (row) => ({
   top_bidder_rate: row.top_bidder?.amount ?? "-",
   top_bidder_code: row.top_bidder?.customer_code ?? "-",
   quantity: row.tender?.qty ?? "-",
+  unit: row.tender?.unit ?? "-",
   // bidder_address: row.bidders?.address ?? "-",
 });
 
@@ -173,6 +174,8 @@ const biddersLoading = ref(false);
 const biddersTender = ref(null);
 const bidders = ref([]);
 const biddersActions = ref({ can_accept: false, can_cancel: false });
+// optional note sent with Accept/Cancel; shown read-only once the tender is decided
+const remarks = ref("");
 
 const openBiddersModal = async (row) => {
   showBiddersModal.value = true;
@@ -180,6 +183,7 @@ const openBiddersModal = async (row) => {
   biddersTender.value = row;
   bidders.value = [];
   biddersActions.value = { can_accept: false, can_cancel: false };
+  remarks.value = "";
 
   try {
     const response = await axios.get(
@@ -193,6 +197,7 @@ const openBiddersModal = async (row) => {
       can_accept: false,
       can_cancel: false,
     };
+    remarks.value = response?.data?.remarks ?? response?.data?.tender?.remarks ?? "";
   } catch (error) {
     const message = extractErrorMessage(
       error.response?.data,
@@ -210,7 +215,10 @@ const closeBiddersModal = () => {
   biddersTender.value = null;
   bidders.value = [];
   biddersActions.value = { can_accept: false, can_cancel: false };
+  remarks.value = "";
 };
+
+const canDecide = () => biddersActions.value.can_accept || biddersActions.value.can_cancel;
 
 // the backend always declares the highest (1st position) bid the winner -
 // 2nd/3rd are backups only and are never accepted
@@ -223,18 +231,15 @@ const canAccept = () => biddersActions.value.can_accept && !!primaryBidder();
 const showAcceptModal = ref(false);
 const actionLoading = ref(false);
 const selectedBidder = ref(null);
-const acceptRemarks = ref("");
 
 const openAcceptModal = () => {
   selectedBidder.value = primaryBidder();
-  acceptRemarks.value = "";
   showAcceptModal.value = true;
 };
 
 const closeAcceptModal = () => {
   showAcceptModal.value = false;
   selectedBidder.value = null;
-  acceptRemarks.value = "";
 };
 
 const confirmAccept = async () => {
@@ -247,7 +252,7 @@ const confirmAccept = async () => {
       `${apiBase}/admin/bidder-approvals/${biddersTender.value.tender_id}/accept`,
       {
         customer_code: selectedBidder.value.customer_code,
-        remarks: acceptRemarks.value.trim(),
+        remarks: remarks.value.trim(),
       },
       loginStore.getTokenConfig
     );
@@ -292,7 +297,7 @@ const confirmCancel = async () => {
   try {
     const response = await axios.post(
       `${apiBase}/admin/bidder-approvals/${biddersTender.value.tender_id}/cancel`,
-      null,
+      { remarks: remarks.value.trim() },
       loginStore.getTokenConfig
     );
 
@@ -390,6 +395,7 @@ onMounted(() => {
               <th>Product Code</th>
               <th>Product Name</th>
               <th>Quantity</th>
+              <th>Unit</th>
               <th class="sortable-th" @click="toggleClosingDateSort">
                 Closing Date
                 <i class="bx" :class="closingDateSortIcon()"></i>
@@ -416,6 +422,7 @@ onMounted(() => {
                 <td data-label="Product Code">{{ row.product_code }}</td>
                 <td data-label="Product Name">{{ row.product_name }}</td>
                 <td data-label="Quantity" class="text-right">{{ row.quantity }}</td>
+                <td data-label="Unit">{{ row.unit }}</td>
                 <td data-label="Closing Date">{{ row.closing_date }}</td>
                 <td data-label="Top Bidder">{{ row.top_bidder_name }}</td>
                 <td data-label="Top Bidder Code">{{ row.top_bidder_code }}</td>
@@ -490,7 +497,7 @@ onMounted(() => {
                 </div>
                 <div class="view-row">
                   <span class="view-label">Product Qty</span>
-                  <span class="view-value">{{ biddersTender?.qty || "-" }}</span>
+                  <span class="view-value">{{ biddersTender?.qty || "-" }} {{ biddersTender?.unit || "-" }}</span>
                 </div>
 
                 <div class="view-row">
@@ -530,7 +537,7 @@ onMounted(() => {
 
                       <div class="modal-header-right" style="margin-left: auto">
                         <span class="modal-time">
-                          {{ bidders?.bid_time || "-" }}
+                          {{ bidder.bid_time || "-" }}
                         </span>
                       </div>
                     </div>
@@ -552,6 +559,22 @@ onMounted(() => {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div class="remarks-field">
+                <label for="bidders-remarks" class="view-label">
+                  Remarks <span v-if="canDecide()" class="optional-tag">(optional)</span>
+                </label>
+                <textarea
+                  v-if="canDecide()"
+                  id="bidders-remarks"
+                  v-model="remarks"
+                  class="remarks-input"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="Write your remarks here..."
+                ></textarea>
+                <p v-else class="remarks-text">{{ remarks || "-" }}</p>
               </div>
             </template>
           </div>
@@ -596,17 +619,6 @@ onMounted(() => {
             }}</strong>
             as the winning bidder for this tender?
           </p>
-
-          <div class="remarks-field">
-            <label for="accept-remarks" class="view-label">Remarks</label>
-            <textarea
-              id="accept-remarks"
-              v-model="acceptRemarks"
-              class="remarks-input"
-              rows="4"
-              placeholder="Write your remarks here..."
-            ></textarea>
-          </div>
 
           <div class="form-actions">
             <button type="button" class="cancel-btn" @click="closeAcceptModal">
@@ -1157,6 +1169,18 @@ onMounted(() => {
   }
 }
 
+.optional-tag {
+  font-weight: 600;
+  text-transform: none;
+}
+
+.remarks-text {
+  margin: 0;
+  font-size: 14px;
+  color: #2b2e24;
+  white-space: pre-wrap;
+}
+
 .delete-confirm-btn {
   height: 38px;
   padding: 0 18px;
@@ -1199,6 +1223,13 @@ onMounted(() => {
     opacity: 0.6;
     cursor: not-allowed;
   }
+}
+
+.modal-time{
+  background: #52796F;
+    padding: 6px;
+    border-radius: 8px;
+    color: white;
 }
 
 @media (max-width: 768px) {
