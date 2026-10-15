@@ -176,6 +176,12 @@ const bidders = ref([]);
 const biddersActions = ref({ can_accept: false, can_cancel: false });
 // optional note sent with Accept/Cancel; shown read-only once the tender is decided
 const remarks = ref("");
+// backend rejects remarks longer than 255 characters
+const REMARKS_MAX_LENGTH = 255;
+
+const remarksLimitReached = () => remarks.value.length >= REMARKS_MAX_LENGTH;
+// maxlength only blocks typing - remarks loaded from the server can still exceed it
+const remarksTooLong = () => remarks.value.trim().length > REMARKS_MAX_LENGTH;
 
 const openBiddersModal = async (row) => {
   showBiddersModal.value = true;
@@ -210,6 +216,62 @@ const openBiddersModal = async (row) => {
   }
 };
 
+const formatBidTime = (time) => {
+  if (!time) return "";
+
+  const [hours, minutes, seconds] = time.split(":");
+  let hour = parseInt(hours, 10);
+
+  const period = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+
+  return `${String(hour).padStart(2, "0")}:${minutes}:${seconds} ${period}`;
+};
+
+const formatBidDateTime = (bidder) => {
+  let date = bidder?.bid_date;
+  let time = bidder?.bid_time;
+
+  // bid_time may come as a full datetime, e.g. "2026-10-11 14:00:00"
+  const parts = String(time || "").split(/[T\s]/);
+  if (parts.length > 1) {
+    date = date || parts[0];
+    time = parts[1];
+  }
+
+  const formattedTime = formatBidTime(time);
+  if (!date) return formattedTime;
+
+  return `${formatClosingDate(date)} ${formattedTime}`.trim();
+};
+
+const formatClosingDate = (value) => {
+  if (!value || value === "-") return "-";
+
+  const str = String(value).trim();
+
+  // e.g. "2026-10-11 14:00:00"
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](.*))?$/);
+  if (iso) {
+    const [, year, month, day, time] = iso;
+    const date = `${day}/${month}/${year}`;
+    return time ? `${date} ${time}` : date;
+  }
+
+  // e.g. "Oct 11, 02:00 PM" or "Oct 11, 2026, 02:00 PM"
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const named = str.match(/^([A-Za-z]{3})[a-z]*\s+(\d{1,2}),?\s*(?:(\d{4}),?\s*)?(.*)$/);
+  if (named) {
+    const [, mon, day, year, time] = named;
+    const monthIndex = months.indexOf(mon.toLowerCase());
+    if (monthIndex === -1) return value;
+    const date = `${day.padStart(2, "0")}/${String(monthIndex + 1).padStart(2, "0")}/${year || new Date().getFullYear()}`;
+    return time ? `${date} ${time}` : date;
+  }
+
+  return value;
+};
+
 const closeBiddersModal = () => {
   showBiddersModal.value = false;
   biddersTender.value = null;
@@ -218,14 +280,16 @@ const closeBiddersModal = () => {
   remarks.value = "";
 };
 
-const canDecide = () => biddersActions.value.can_accept || biddersActions.value.can_cancel;
+const canDecide = () =>
+  biddersActions.value.can_accept || biddersActions.value.can_cancel;
 
 // the backend always declares the highest (1st position) bid the winner -
 // 2nd/3rd are backups only and are never accepted
 const primaryBidder = () =>
   bidders.value.find((bidder) => bidder.role === "primary") ?? null;
 
-const canAccept = () => biddersActions.value.can_accept && !!primaryBidder();
+const canAccept = () =>
+  biddersActions.value.can_accept && !!primaryBidder() && !remarksTooLong();
 
 // accept confirmation
 const showAcceptModal = ref(false);
@@ -410,10 +474,10 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="12" class="state-cell">Loading...</td>
+              <td colspan="14" class="state-cell">Loading...</td>
             </tr>
             <tr v-else-if="!approvals().length">
-              <td colspan="12" class="state-cell">No bidder approvals found</td>
+              <td colspan="14" class="state-cell">No bidder approvals found</td>
             </tr>
             <template v-else>
               <tr v-for="(row, index) in approvals()" :key="row.tender_id">
@@ -426,7 +490,9 @@ onMounted(() => {
                 <td data-label="Closing Date">{{ row.closing_date }}</td>
                 <td data-label="Top Bidder">{{ row.top_bidder_name }}</td>
                 <td data-label="Top Bidder Code">{{ row.top_bidder_code }}</td>
-                <td data-label="Top Bidder Rate" class="text-right">{{ row.top_bidder_rate }}</td>
+                <td data-label="Top Bidder Rate" class="text-right">
+                  {{ row.top_bidder_rate }}
+                </td>
                 <td data-label="Total Bidders" class="text-right">
                   {{ row.total_bidders }}
                 </td>
@@ -497,16 +563,19 @@ onMounted(() => {
                 </div>
                 <div class="view-row">
                   <span class="view-label">Product Qty</span>
-                  <span class="view-value">{{ biddersTender?.qty || "-" }} {{ biddersTender?.unit || "-" }}</span>
+                  <span class="view-value"
+                    >{{ biddersTender?.qty || "-" }}
+                    {{ biddersTender?.unit || "-" }}</span
+                  >
                 </div>
 
                 <div class="view-row">
                   <span class="view-label">Closing Date</span>
-                  <span class="view-value">{{ biddersTender?.closing_date || "-" }}</span>
+                  <span class="view-value">{{ formatClosingDate(biddersTender?.closing_date) }}</span>
                 </div>
 
                 <div class="view-row">
-                  <span class="view-label">Status</span>
+                  <span class="view-label">Bid Status</span>
                   <span class="view-value">{{ biddersTender?.status || "-" }}</span>
                 </div>
               </div>
@@ -523,39 +592,42 @@ onMounted(() => {
                   :class="{ 'is-winner': bidder.is_winner }"
                 >
                   <div class="bidder-card-info">
-                    <span class="bidder-role" :class="bidder.role">
-                      {{ bidderRoleLabel(bidder) }}
-                    </span>
+                    <div style="display: flex; align-items: center">
+                      <span class="bidder-role" :class="bidder.role">
+                        {{ bidderRoleLabel(bidder) }}
+                      </span>
+                      <span class="modal-time" style="margin-left: auto">
+                        {{ formatBidDateTime(bidder) }}
+                      </span>
+                    </div>
 
                     <div
                       class="bidder-name-row"
                       style="display: flex; align-items: center; gap: 15px"
                     >
-                      <strong>{{ bidder.customer_name || bidder.customer_code }}</strong>
+                      <strong
+                        >{{ bidder.customer_name || bidder.customer_code }} -
+                        {{ bidder.customer_code }}</strong
+                      >
 
                       <span v-if="bidder.is_winner" class="winner-tag">Winner</span>
 
-                      <div class="modal-header-right" style="margin-left: auto">
-                        <span class="modal-time">
-                          {{ bidder.bid_time || "-" }}
-                        </span>
-                      </div>
+                      <span class="bidder-amount" style="margin-left: auto"
+                        ><span class="meta-label">Amount:</span> {{ bidder.amount }}</span
+                      >
                     </div>
                     <div class="bidder-meta">
-                      <span
+                      <!-- <span
                         ><span class="meta-label">Bidder ID:</span>
                         {{ bidder.customer_code }}</span
+                      > -->
+                      <span v-if="bidder.phone"
+                        ><span class="meta-label">Phone:</span> {{ bidder.phone }}</span
                       >
                       <span>
                         <span class="meta-label">Address:</span>
                         {{ bidder.address || "-" }}
                       </span>
-                      <span v-if="bidder.phone"
-                        ><span class="meta-label">Phone:</span> {{ bidder.phone }}</span
-                      >
-                      <span class="bidder-amount"
-                        ><span class="meta-label">Amount:</span> {{ bidder.amount }}</span
-                      >
                     </div>
                   </div>
                 </div>
@@ -570,10 +642,27 @@ onMounted(() => {
                   id="bidders-remarks"
                   v-model="remarks"
                   class="remarks-input"
+                  :class="{ 'is-limit': remarksLimitReached() }"
                   rows="3"
-                  maxlength="500"
+                  :maxlength="REMARKS_MAX_LENGTH"
                   placeholder="Write your remarks here..."
                 ></textarea>
+                <div
+                  v-if="canDecide()"
+                  class="remarks-footer"
+                  :class="{ 'is-limit': remarksLimitReached() }"
+                >
+                  <span class="remarks-hint">
+                    {{
+                      remarksLimitReached()
+                        ? `Character limit reached. Remarks cannot exceed ${REMARKS_MAX_LENGTH} characters.`
+                        : `Maximum ${REMARKS_MAX_LENGTH} characters allowed.`
+                    }}
+                  </span>
+                  <span class="remarks-counter">
+                    {{ remarks.length }}/{{ REMARKS_MAX_LENGTH }}
+                  </span>
+                </div>
                 <p v-else class="remarks-text">{{ remarks || "-" }}</p>
               </div>
             </template>
@@ -584,6 +673,7 @@ onMounted(() => {
               Close
             </button>
             <button
+              v-if="biddersActions.can_accept && primaryBidder()"
               type="button"
               class="submit-btn"
               :disabled="!canAccept()"
@@ -592,9 +682,10 @@ onMounted(() => {
               Accept
             </button>
             <button
+              v-if="biddersActions.can_cancel"
               type="button"
               class="delete-confirm-btn"
-              :disabled="!biddersActions.can_cancel"
+              :disabled="remarksTooLong()"
               @click="openCancelModal"
             >
               Cancel
@@ -1084,6 +1175,8 @@ onMounted(() => {
 }
 
 .bidder-card-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1167,6 +1260,29 @@ onMounted(() => {
   &:focus {
     border-color: #285239;
   }
+
+  &.is-limit,
+  &.is-limit:focus {
+    border-color: #b42318;
+  }
+}
+
+.remarks-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 12px;
+  color: #8a8c80;
+
+  &.is-limit {
+    color: #b42318;
+    font-weight: 600;
+  }
+}
+
+.remarks-counter {
+  flex-shrink: 0;
 }
 
 .optional-tag {
@@ -1225,11 +1341,12 @@ onMounted(() => {
   }
 }
 
-.modal-time{
-  background: #52796F;
-    padding: 6px;
-    border-radius: 8px;
-    color: white;
+.modal-time {
+  background: #52796f;
+  padding: 1px 6px 1px 5px;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
 }
 
 @media (max-width: 768px) {
